@@ -933,9 +933,9 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- LÓGICA DE TROLL: TRACKER (Frente a la cara, sin animación/duro) Y ÓRBITA
+	-- LÓGICA DE TROLL: TRACKER (Frente exacto a la cara) Y ÓRBITA
 	local targetPlayer = settings.selectedTpPlayer
-	local rootPart = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+	local rootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
 	local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
 
 	if targetPlayer and targetPlayer.Character and rootPart then
@@ -943,9 +943,11 @@ RunService.RenderStepped:Connect(function(dt)
 		if targetRoot then
 			if settings.trollTrackEnabled then
 				if humanoid then humanoid.PlatformStand = true end
-				-- Se coloca frente a su cara (LookVector positivo) y apunta la vista directamente hacia él
-				local offset = targetRoot.CFrame.LookVector * 2 + Vector3.new(0, 0, 0)
-				rootPart.CFrame = CFrame.new(targetRoot.Position + offset, targetRoot.Position)
+				
+				-- Se coloca exactamente frente a su cara usando el LookVector positivo y orienta tu vista hacia él
+				local frontPosition = targetRoot.Position + (targetRoot.CFrame.LookVector * 2.5) + Vector3.new(0, 0.5, 0)
+				rootPart.CFrame = CFrame.new(frontPosition, targetRoot.Position)
+				
 				rootPart.Velocity = Vector3.new(0, 0, 0)
 				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 			elseif settings.trollOrbitEnabled then
