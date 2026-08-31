@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB - FULL VERSION (ULTIMATE WALLBANG & SILENT AIM HEADSHOT)
+    ZVOLT HUB - ULTIMATE ALL-IN-ONE (ESP, HITBOX, SILENT AIM & WALLBANG FIXED)
 ]]--
 
 local Players = game:GetService("Players")
@@ -10,9 +10,10 @@ local localPlayer = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local mouse = localPlayer:GetMouse()
 
---// Configuración General
 local settings = {
 	aimEnabled = false,
+	silentAimEnabled = false,
+	wallbangEnabled = false,
 	espEnabled = false,
 	espNamesEnabled = false,
 	espLinesEnabled = true,
@@ -27,16 +28,12 @@ local settings = {
 	hitboxEnabled = false,
 	spinEnabled = false,
 	ctrlClickTpEnabled = false,
-	trollTrackEnabled = false,
-	trollOrbitEnabled = false,
-	trollJerkEnabled = false,
-	wallbangEnabled = false,
-	silentAimEnabled = false,
 	targetPart = "Head",
 	hitboxSize = 5,
 	spinSpeed = 50,
 	smoothing = 0.3,
-	fovRadius = 140,
+	aimFovRadius = 120,
+	silentFovRadius = 180,
 	maxDistance = 1500,
 	flySpeed = 50,
 	customSpeed = 32,
@@ -44,7 +41,6 @@ local settings = {
 	selectedTpPlayer = nil
 }
 
---// Sistema de Keybinds (F1 a F6)
 local keybinds = {
 	aimbot = Enum.KeyCode.F1,
 	esp = Enum.KeyCode.F2,
@@ -68,7 +64,6 @@ UserInputService.InputEnded:Connect(function(input, gp)
 	end
 end)
 
---// Funcionalidad Ctrl + Click
 UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 and settings.ctrlClickTpEnabled then
@@ -82,7 +77,6 @@ UserInputService.InputBegan:Connect(function(input, gp)
 	end
 end)
 
---// Estilo Visual Neón Zvolt
 local COLOR_BG = Color3.fromRGB(13, 13, 17)
 local COLOR_CARD = Color3.fromRGB(18, 18, 24)
 local COLOR_ACCENT = Color3.fromRGB(0, 242, 255)
@@ -101,30 +95,43 @@ local function sendNotification(title, text)
 	end)
 end
 
---// GUI Principal
 local gui = Instance.new("ScreenGui")
 gui.Name = "ZvoltUIContainer_" .. math.random(11111, 99999)
 gui.ResetOnSpawn = false
 gui.Parent = localPlayer:WaitForChild("PlayerGui")
 
---// Círculo de FOV
-local fovFrame = Instance.new("Frame")
-fovFrame.Name = "FovIndicator"
-fovFrame.Size = UDim2.new(0, settings.fovRadius * 2, 0, settings.fovRadius * 2)
-fovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-fovFrame.BackgroundTransparency = 1
-fovFrame.Visible = false
-fovFrame.Parent = gui
+local aimFovFrame = Instance.new("Frame")
+aimFovFrame.Name = "AimFovIndicator"
+aimFovFrame.Size = UDim2.new(0, settings.aimFovRadius * 2, 0, settings.aimFovRadius * 2)
+aimFovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+aimFovFrame.BackgroundTransparency = 1
+aimFovFrame.Visible = false
+aimFovFrame.Parent = gui
 
-local fovStroke = Instance.new("UIStroke")
-fovStroke.Color = COLOR_ACCENT
-fovStroke.Thickness = 1.5
-fovStroke.Parent = fovFrame
-local fovCorner = Instance.new("UICorner")
-fovCorner.CornerRadius = UDim.new(1, 0)
-fovCorner.Parent = fovFrame
+local aimFovStroke = Instance.new("UIStroke")
+aimFovStroke.Color = COLOR_ACCENT
+aimFovStroke.Thickness = 1.5
+aimFovStroke.Parent = aimFovFrame
+local aimFovCorner = Instance.new("UICorner")
+aimFovCorner.CornerRadius = UDim.new(1, 0)
+aimFovCorner.Parent = aimFovFrame
 
---// PANEL PRINCIPAL
+local silentFovFrame = Instance.new("Frame")
+silentFovFrame.Name = "SilentFovIndicator"
+silentFovFrame.Size = UDim2.new(0, settings.silentFovRadius * 2, 0, settings.silentFovRadius * 2)
+silentFovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+silentFovFrame.BackgroundTransparency = 1
+silentFovFrame.Visible = false
+silentFovFrame.Parent = gui
+
+local silentFovStroke = Instance.new("UIStroke")
+silentFovStroke.Color = Color3.fromRGB(255, 0, 128)
+silentFovStroke.Thickness = 1.5
+silentFovStroke.Parent = silentFovFrame
+local silentFovCorner = Instance.new("UICorner")
+silentFovCorner.CornerRadius = UDim.new(1, 0)
+silentFovCorner.Parent = silentFovFrame
+
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 720, 0, 520)
@@ -142,7 +149,6 @@ mfStroke.Color = Color3.fromRGB(35, 35, 45)
 mfStroke.Thickness = 1.5
 mfStroke.Parent = mainFrame
 
---// BARRA SUPERIOR
 local topBar = Instance.new("Frame")
 topBar.Size = UDim2.new(1, 0, 0, 55)
 topBar.BackgroundTransparency = 1
@@ -192,7 +198,6 @@ tcLayout.Padding = UDim.new(0, 8)
 tcLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 tcLayout.Parent = tabsContainer
 
---// ÁREA DE CONTENIDO
 local contentArea = Instance.new("Frame")
 contentArea.Size = UDim2.new(1, 0, 1, -55)
 contentArea.Position = UDim2.new(0, 0, 0, 55)
@@ -262,7 +267,6 @@ end
 
 showPage("combat")
 
---// COMPONENTES FIJOS
 local function createCard(page, titleText, posX, posY, sizeX, sizeY)
 	local card = Instance.new("Frame")
 	card.Size = UDim2.new(0, sizeX, 0, sizeY)
@@ -431,16 +435,20 @@ local cardCombatGen = createCard(pages["combat"], "General", 10, 10, 680, 215)
 createToggle(cardCombatGen, 0, "Aimbot", function(v) settings.aimEnabled = v end, "aimbot")
 createToggle(cardCombatGen, 36, "Hitbox Extender", function(v) settings.hitboxEnabled = v end, "hitbox")
 createToggle(cardCombatGen, 72, "Wallbang Absoluto (Atravesar cualquier pared)", function(v) settings.wallbangEnabled = v end)
-createToggle(cardCombatGen, 108, "Autodirección de Balas a la Cabeza (Silent Aim)", function(v) settings.silentAimEnabled = v end)
+createToggle(cardCombatGen, 108, "Silent Aim (Atraviesa mapas y redirige balas)", function(v) settings.silentAimEnabled = v end)
 createSlider(cardCombatGen, 144, settings.hitboxSize, 2, 20, "Hitbox Size", function(val) settings.hitboxSize = val end)
 
-local cardCombatFov = createCard(pages["combat"], "FOV Settings", 10, 235, 680, 85)
-createSlider(cardCombatFov, 0, settings.fovRadius, 50, 300, "FOV Radius", function(val)
-	settings.fovRadius = val
-	fovFrame.Size = UDim2.new(0, val * 2, 0, val * 2)
+local cardCombatFov = createCard(pages["combat"], "FOV Independent Settings", 10, 235, 680, 125)
+createSlider(cardCombatFov, 0, settings.aimFovRadius, 50, 300, "Aimbot FOV", function(val)
+	settings.aimFovRadius = val
+	aimFovFrame.Size = UDim2.new(0, val * 2, 0, val * 2)
+end)
+createSlider(cardCombatFov, 55, settings.silentFovRadius, 50, 400, "Silent Aim FOV", function(val)
+	settings.silentFovRadius = val
+	silentFovFrame.Size = UDim2.new(0, val * 2, 0, val * 2)
 end)
 
-local cardCombatSettings = createCard(pages["combat"], "Target Bone Selection", 10, 330, 680, 85)
+local cardCombatSettings = createCard(pages["combat"], "Target Bone Selection", 10, 370, 680, 85)
 local partsList = {"Head", "HumanoidRootPart", "UpperTorso"}
 local currentPartIndex = 1
 local boneBtn = Instance.new("TextButton")
@@ -672,7 +680,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
---// BOTÓN FLOTANTE MÓVIL
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ZvoltFloatingButton"
 toggleButton.Size = UDim2.new(0, 90, 0, 42)
@@ -718,7 +725,6 @@ toggleButton.MouseButton1Click:Connect(function()
 	mainFrame.Visible = not mainFrame.Visible
 end)
 
---// LÓGICA DE ESP
 local espObjects = {}
 
 local function removeESP(player)
@@ -880,9 +886,9 @@ end
 
 Players.PlayerRemoving:Connect(function(player) removeESP(player) end)
 
-local function getClosestPlayerInFOV()
+local function getClosestPlayerForSilentAim()
 	local closestPlayer = nil
-	local shortestDistance = settings.fovRadius
+	local shortestDistance = settings.silentFovRadius
 	local mouseLocation = UserInputService:GetMouseLocation()
 
 	for _, player in ipairs(Players:GetPlayers()) do
@@ -896,7 +902,7 @@ local function getClosestPlayerInFOV()
 					local screenPoint, onScreen = camera:WorldToViewportPoint(targetPart.Position)
 					if onScreen then
 						local distCenter = (Vector2.new(screenPoint.X, screenPoint.Y) - mouseLocation).Magnitude
-						if distCenter <= settings.fovRadius and distCenter < shortestDistance then
+						if distCenter <= settings.silentFovRadius and distCenter < shortestDistance then
 							shortestDistance = distCenter
 							closestPlayer = player
 						end
@@ -908,24 +914,49 @@ local function getClosestPlayerInFOV()
 	return closestPlayer
 end
 
---// HOOK POTENTE PARA SILENT AIM Y WALLBANG GLOBAL A TRAVÉS DE CUALQUIER PARED
+local function getClosestPlayerForAimbot()
+	local closestPlayer = nil
+	local shortestDistance = settings.aimFovRadius
+	local mouseLocation = UserInputService:GetMouseLocation()
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= localPlayer and player.Character and localPlayer.Character then
+			local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+			local targetPart = player.Character:FindFirstChild(settings.targetPart) or player.Character:FindFirstChild("Head")
+			local localRoot = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+			if humanoid and humanoid.Health > 0 and targetPart and localRoot then
+				if (localRoot.Position - targetPart.Position).Magnitude <= settings.maxDistance then
+					local screenPoint, onScreen = camera:WorldToViewportPoint(targetPart.Position)
+					if onScreen then
+						local distCenter = (Vector2.new(screenPoint.X, screenPoint.Y) - mouseLocation).Magnitude
+						if distCenter <= settings.aimFovRadius and distCenter < shortestDistance then
+							shortestDistance = distCenter
+							closestPlayer = player
+						end
+					end
+				end
+			end
+		end
+	end
+	return closestPlayer
+end
+
 local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
 	local method = getnamecallmethod()
 	local args = {...}
 	
 	if settings.silentAimEnabled and (method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" or method == "Raycast") then
-		local closest = getClosestPlayerInFOV()
+		local closest = getClosestPlayerForSilentAim()
 		if closest and closest.Character then
 			local head = closest.Character:FindFirstChild("Head")
 			if head then
 				if method == "Raycast" then
-					-- Redirección completa para el nuevo motor Raycast (args[1] = Origin, args[2] = Direction)
 					local origin = args[1]
 					if typeof(origin) == "Vector3" then
-						local newDir = (head.Position - origin).Unit * (args[2].Magnitude or 500)
+						local newDir = (head.Position - origin).Unit * (args[2].Magnitude or 1000)
 						args[2] = newDir
-						-- Opcional: ignorar todo el mapa forzando un filtro vacío o ignorando las paredes en los parámetros
 						if typeof(args[3]) == "RaycastParams" then
 							pcall(function()
 								args[3].FilterType = Enum.RaycastFilterType.Exclude
@@ -935,7 +966,6 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
 						return oldNamecall(self, unpack(args))
 					end
 				else
-					-- Redirección para llamadas clásicas de Ray
 					local origRay = args[1]
 					if typeof(origRay) == "Ray" then
 						local newDir = (head.Position - origRay.Origin).Unit * origRay.Direction.Magnitude
@@ -957,19 +987,20 @@ RunService.RenderStepped:Connect(function(dt)
 	if not camera or not localPlayer.Character then return end
 	
 	local mouseLocation = UserInputService:GetMouseLocation()
-	fovFrame.Position = UDim2.new(0, mouseLocation.X, 0, mouseLocation.Y)
-	fovFrame.Size = UDim2.new(0, settings.fovRadius * 2, 0, settings.fovRadius * 2)
-	fovFrame.Visible = settings.aimEnabled or settings.silentAimEnabled
+	
+	aimFovFrame.Position = UDim2.new(0, mouseLocation.X, 0, mouseLocation.Y)
+	aimFovFrame.Visible = settings.aimEnabled
+
+	silentFovFrame.Position = UDim2.new(0, mouseLocation.X, 0, mouseLocation.Y)
+	silentFovFrame.Visible = settings.silentAimEnabled
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= localPlayer then updateESPForPlayer(player) end
 	end
 
-	-- Wallbang absoluto: Anula por completo la colisión y capacidad de bloqueo de rayos del entorno en todo el mapa
 	if settings.wallbangEnabled then
 		for _, obj in ipairs(workspace:GetDescendants()) do
 			if obj:IsA("BasePart") then
-				-- Evita afectar al jugador local y enemigos para no romper su físicas de movimiento
 				local isCharPart = false
 				for _, p in ipairs(Players:GetPlayers()) do
 					if p.Character and obj:IsDescendantOf(p.Character) then
@@ -986,7 +1017,6 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- LÓGICA DE TROLL
 	local targetPlayer = settings.selectedTpPlayer
 	local rootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
 	local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
@@ -1054,7 +1084,7 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 
 	if settings.aimEnabled and isAimingRightClick then
-		local targetPlayerFov = getClosestPlayerInFOV()
+		local targetPlayerFov = getClosestPlayerForAimbot()
 		if targetPlayerFov and targetPlayerFov.Character then
 			local targetPart = targetPlayerFov.Character:FindFirstChild(settings.targetPart) or targetPlayerFov.Character:FindFirstChild("Head")
 			if targetPart then
@@ -1077,9 +1107,11 @@ RunService.RenderStepped:Connect(function(dt)
 			if player ~= localPlayer and player.Character then
 				local tp = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
 				if tp then
-					tp.Size = Vector3.new(settings.hitboxSize, settings.hitboxSize, settings.hitboxSize)
-					tp.Transparency = 0.6
-					tp.CanCollide = false
+					pcall(function()
+						tp.Size = Vector3.new(settings.hitboxSize, settings.hitboxSize, settings.hitboxSize)
+						tp.Transparency = 0.6
+						tp.CanCollide = false
+					end)
 				end
 			end
 		end
