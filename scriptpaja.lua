@@ -1,4 +1,4 @@
-[cite: 1]--[[
+--[[
     ZVOLT HUB - FULL VERSION (FIXED ESP BOX & CTRL+CLICK TOGGLE + TROLL & WALLBANG)
 ]]--
 
@@ -30,7 +30,7 @@ local settings = {
 	-- NUEVAS OPCIONES AÑADIDAS
 	trollTrackEnabled = false,
 	trollOrbitEnabled = false,
-	trollJerkingEnabled = false, -- NUEVA OPCIÓN: EMOTE HACIÉNDOSE LA PAJA
+	trollJerkEnabled = false, -- Nueva opción de emote troll
 	wallbangEnabled = false,
 	targetPart = "Head",
 	hitboxSize = 5,
@@ -569,11 +569,11 @@ tpActionBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- PESTAÑA: TROLL (Actualizada con el emote)
+-- PESTAÑA: TROLL
 local cardTroll = createCard(pages["troll"], "Troll Actions", 10, 10, 680, 160)
 createToggle(cardTroll, 0, "Tracker (Frente a su cara sin animación)", function(v) settings.trollTrackEnabled = v end)
 createToggle(cardTroll, 36, "Orbit (Girar alrededor del seleccionado)", function(v) settings.trollOrbitEnabled = v end)
-createToggle(cardTroll, 72, "Emote: Hacerse la paja (Frente al objetivo)", function(v) settings.trollJerkingEnabled = v end)
+createToggle(cardTroll, 72, "Emote De Pie (Mover mano adelante y atrás)", function(v) settings.trollJerkEnabled = v end)
 
 -- PESTAÑA: MISC
 local cardMisc = createCard(pages["misc"], "Movement & Misc", 10, 10, 680, 420)
@@ -936,11 +936,10 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- LÓGICA DE TROLL: TRACKER, ÓRBITA Y EL EMOTE DE HACERSE LA PAJA
+	-- LÓGICA DE TROLL: TRACKER, ÓRBITA Y EMOTE DE PIE
 	local targetPlayer = settings.selectedTpPlayer
 	local rootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
 	local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
-	local upperTorso = localPlayer.Character and (localPlayer.Character:FindFirstChild("UpperTorso") or localPlayer.Character:FindFirstChild("Torso"))
 
 	if targetPlayer and targetPlayer.Character and rootPart then
 		local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -964,20 +963,23 @@ RunService.RenderStepped:Connect(function(dt)
 				rootPart.CFrame = CFrame.new(targetPos, targetRoot.Position)
 				rootPart.Velocity = Vector3.new(0, 0, 0)
 				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-			elseif settings.trollJerkingEnabled then
+			elseif settings.trollJerkEnabled then
 				if humanoid then humanoid.PlatformStand = true end
 				
-				local frontPosition = targetRoot.Position + (targetRoot.CFrame.LookVector * 1.5)
+				-- Se coloca de pie frente al jugador seleccionado
+				local frontPosition = targetRoot.Position + (targetRoot.CFrame.LookVector * 2.5)
 				rootPart.CFrame = CFrame.new(frontPosition, targetRoot.Position)
 				rootPart.Velocity = Vector3.new(0, 0, 0)
 				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 
-				jerkAnimTime = jerkAnimTime + (dt * 20)
-				local offsetZ = math.sin(jerkAnimTime) * 0.8
-				rootPart.CFrame = rootPart.CFrame * CFrame.new(0, 0, offsetZ)
-
-				if upperTorso then
-					upperTorso.CFrame = upperTorso.CFrame * CFrame.Angles(math.rad(math.sin(jerkAnimTime * 2) * 25), 0, 0)
+				-- Manipulación procedural de hombros/brazo derecho para simular el movimiento adelante y atrás
+				jerkAnimTime = jerkAnimTime + (dt * 12) -- Velocidad del movimiento
+				local rShoulder = localPlayer.Character:FindFirstChild("Right Shoulder", true) or (localPlayer.Character:FindFirstChild("Torso") and localPlayer.Character.Torso:FindFirstChild("Right Shoulder"))
+				
+				if rShoulder and rShoulder:IsA("Motor6D") then
+					-- Aplicamos rotación oscilante en el eje X para mover la mano hacia adelante y hacia atrás
+					local offsetAngle = math.sin(jerkAnimTime) * 0.8
+					rShoulder.C0 = CFrame.new(1, 0.5, 0) * CFrame.Angles(offsetAngle, 0, 0)
 				end
 			else
 				if humanoid and not settings.flyEnabled then humanoid.PlatformStand = false end
@@ -986,7 +988,7 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 
 	if settings.spinEnabled then
-		if rootPart and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.trollJerkingEnabled then 
+		if rootPart and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.trollJerkEnabled then 
 			rootPart.CFrame = rootPart.CFrame * CFrame.Angles(0, math.rad(settings.spinSpeed), 0) 
 		end
 	end
@@ -1045,7 +1047,7 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 
 	local currentHumanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
-	if currentHumanoid and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.trollJerkingEnabled then
+	if currentHumanoid and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.trollJerkEnabled then
 		if settings.speedEnabled then
 			currentHumanoid.WalkSpeed = settings.customSpeed
 		end
@@ -1078,7 +1080,7 @@ RunService.Heartbeat:Connect(function(dt)
 			rootPart.Velocity = Vector3.new(0, 0, 0)
 			rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 		end
-	elseif localPlayer.Character and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.trollJerkingEnabled then
+	elseif localPlayer.Character and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.trollJerkEnabled then
 		local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
 		if humanoid then humanoid.PlatformStand = false end
 	end
