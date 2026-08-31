@@ -219,7 +219,7 @@ createPage("combat")
 createPage("visuals")
 createPage("weapon")
 createPage("teleport")
-createPage("troll") -- Pestaña Troll nueva
+createPage("troll")
 createPage("misc")
 createPage("keybinds")
 
@@ -232,7 +232,7 @@ end
 local tabNames = {"combat", "visuals", "weapon", "teleport", "troll", "misc", "keybinds"}
 for i, name in ipairs(tabNames) do
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 75, 0, 32) -- Ajustado ligeramente para que entren todas las pestañas
+	btn.Size = UDim2.new(0, 75, 0, 32)
 	btn.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
 	btn.BackgroundTransparency = (name == "combat") and 0 or 1
 	btn.TextColor3 = (name == "combat") and COLOR_ACCENT or COLOR_SUBTEXT
@@ -425,7 +425,7 @@ local function createSlider(parent, posY, defaultVal, minVal, maxVal, titlePrefi
 	end)
 end
 
--- PESTAÑA: COMBAT (Con opción Wallbang añadida)
+-- PESTAÑA: COMBAT
 local cardCombatGen = createCard(pages["combat"], "General", 10, 10, 680, 180)
 createToggle(cardCombatGen, 0, "Aimbot", function(v) settings.aimEnabled = v end, "aimbot")
 createToggle(cardCombatGen, 36, "Hitbox Extender", function(v) settings.hitboxEnabled = v end, "hitbox")
@@ -568,9 +568,9 @@ tpActionBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- PESTAÑA: TROLL (NUEVA)
+-- PESTAÑA: TROLL
 local cardTroll = createCard(pages["troll"], "Troll Actions", 10, 10, 680, 120)
-createToggle(cardTroll, 0, "Tracker (Seguir de cerca mirándole a la cara)", function(v) settings.trollTrackEnabled = v end)
+createToggle(cardTroll, 0, "Tracker (Frente a su cara sin animación)", function(v) settings.trollTrackEnabled = v end)
 createToggle(cardTroll, 36, "Orbit (Girar alrededor del seleccionado)", function(v) settings.trollOrbitEnabled = v end)
 
 -- PESTAÑA: MISC
@@ -920,7 +920,7 @@ RunService.RenderStepped:Connect(function(dt)
 		if player ~= localPlayer then updateESPForPlayer(player) end
 	end
 
-	-- LÓGICA DE WALLBANG (Hace que los enemigos ignoren las colisiones de sus partes para que las balas o sistemas físicos los atraviesen)
+	-- LÓGICA DE WALLBANG
 	if settings.wallbangEnabled then
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player ~= localPlayer and player.Character then
@@ -933,18 +933,23 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- LÓGICA DE TROLL: TRACKER Y ÓRBITA
+	-- LÓGICA DE TROLL: TRACKER (Frente a la cara, sin animación/duro) Y ÓRBITA
 	local targetPlayer = settings.selectedTpPlayer
 	local rootPart = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+	local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
 
 	if targetPlayer and targetPlayer.Character and rootPart then
 		local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
 		if targetRoot then
 			if settings.trollTrackEnabled then
-				local offset = targetRoot.CFrame.LookVector * -2 + Vector3.new(0, 2, 0)
+				if humanoid then humanoid.PlatformStand = true end
+				-- Se coloca frente a su cara (LookVector positivo) y apunta la vista directamente hacia él
+				local offset = targetRoot.CFrame.LookVector * 2 + Vector3.new(0, 0, 0)
 				rootPart.CFrame = CFrame.new(targetRoot.Position + offset, targetRoot.Position)
 				rootPart.Velocity = Vector3.new(0, 0, 0)
+				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 			elseif settings.trollOrbitEnabled then
+				if humanoid then humanoid.PlatformStand = true end
 				orbitAngle = orbitAngle + (dt * 3)
 				local radius = 6
 				local x = targetRoot.Position.X + math.cos(orbitAngle) * radius
@@ -953,6 +958,9 @@ RunService.RenderStepped:Connect(function(dt)
 				
 				rootPart.CFrame = CFrame.new(targetPos, targetRoot.Position)
 				rootPart.Velocity = Vector3.new(0, 0, 0)
+				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+			else
+				if humanoid and not settings.flyEnabled then humanoid.PlatformStand = false end
 			end
 		end
 	end
@@ -1016,17 +1024,17 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
+	local currentHumanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if currentHumanoid and not settings.trollTrackEnabled and not settings.trollOrbitEnabled then
 		if settings.speedEnabled then
-			humanoid.WalkSpeed = settings.customSpeed
+			currentHumanoid.WalkSpeed = settings.customSpeed
 		end
 		if settings.jumpEnabled then
-			humanoid.JumpPower = settings.customJump
-			humanoid.UseJumpPower = true
+			currentHumanoid.JumpPower = settings.customJump
+			currentHumanoid.UseJumpPower = true
 		end
 		if settings.bhopEnabled and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-			if humanoid.FloorMaterial ~= Enum.Material.Air then humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+			if currentHumanoid.FloorMaterial ~= Enum.Material.Air then currentHumanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
 		end
 	end
 end)
@@ -1050,7 +1058,7 @@ RunService.Heartbeat:Connect(function(dt)
 			rootPart.Velocity = Vector3.new(0, 0, 0)
 			rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 		end
-	elseif localPlayer.Character then
+	elseif localPlayer.Character and not settings.trollTrackEnabled and not settings.trollOrbitEnabled then
 		local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
 		if humanoid then humanoid.PlatformStand = false end
 	end
