@@ -30,7 +30,7 @@ local settings = {
 	-- NUEVAS OPCIONES AÑADIDAS
 	trollTrackEnabled = false,
 	trollOrbitEnabled = false,
-	trollJerkEnabled = false, -- Nueva opción de emote troll
+	trollJerkEnabled = false, -- Emote de pie (mano adelante y atrás)
 	wallbangEnabled = false,
 	targetPart = "Head",
 	hitboxSize = 5,
@@ -972,14 +972,16 @@ RunService.RenderStepped:Connect(function(dt)
 				rootPart.Velocity = Vector3.new(0, 0, 0)
 				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 
-				-- Manipulación procedural de hombros/brazo derecho para simular el movimiento adelante y atrás
-				jerkAnimTime = jerkAnimTime + (dt * 12) -- Velocidad del movimiento
-				local rShoulder = localPlayer.Character:FindFirstChild("Right Shoulder", true) or (localPlayer.Character:FindFirstChild("Torso") and localPlayer.Character.Torso:FindFirstChild("Right Shoulder"))
+				-- Manipulación universal de articulaciones (R6 y R15) para mover el brazo hacia adelante y atrás
+				jerkAnimTime = jerkAnimTime + (dt * 12)
+				local char = localPlayer.Character
+				local rShoulder = char:FindFirstChild("Right Shoulder", true) or char:FindFirstChild("RightShoulder", true) or char:FindFirstChild("RightUpperArm", true)
 				
-				if rShoulder and rShoulder:IsA("Motor6D") then
-					-- Aplicamos rotación oscilante en el eje X para mover la mano hacia adelante y hacia atrás
-					local offsetAngle = math.sin(jerkAnimTime) * 0.8
-					rShoulder.C0 = CFrame.new(1, 0.5, 0) * CFrame.Angles(offsetAngle, 0, 0)
+				if rShoulder then
+					local offsetAngle = math.sin(jerkAnimTime) * 1.0
+					if rShoulder:IsA("Motor6D") then
+						rShoulder.Transform = CFrame.Angles(offsetAngle, 0, 0)
+					end
 				end
 			else
 				if humanoid and not settings.flyEnabled then humanoid.PlatformStand = false end
@@ -1068,7 +1070,7 @@ RunService.Heartbeat:Connect(function(dt)
 		if rootPart and humanoid then
 			humanoid.PlatformStand = true
 			local camCF = camera.CFrame
-			local mv = Vector3.new(0, 0, 0)
+            local mv = Vector3.new(0, 0, 0)
 			if UserInputService:IsKeyDown(Enum.KeyCode.W) then mv = mv + camCF.LookVector end
 			if UserInputService:IsKeyDown(Enum.KeyCode.S) then mv = mv - camCF.LookVector end
 			if UserInputService:IsKeyDown(Enum.KeyCode.A) then mv = mv - camCF.RightVector end
