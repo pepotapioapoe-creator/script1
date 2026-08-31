@@ -704,7 +704,7 @@ end)
 UserInputService.InputChanged:Connect(function(input)
 	if draggingBtn and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		local delta = input.Position - dragStartBtn
-		toggleButton.Position = UDim2.new(startPosBtn.X.Scale, startPosAnim.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
+		toggleButton.Position = UDim2.new(startPosBtn.X.Scale, startPosBtn.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
 	end
 end)
 UserInputService.InputEnded:Connect(function(input)
@@ -967,18 +967,15 @@ RunService.RenderStepped:Connect(function(dt)
 			elseif settings.trollJerkingEnabled then
 				if humanoid then humanoid.PlatformStand = true end
 				
-				-- Se coloca pegado frente al objetivo para simular el emote de forma explícita
 				local frontPosition = targetRoot.Position + (targetRoot.CFrame.LookVector * 1.5)
 				rootPart.CFrame = CFrame.new(frontPosition, targetRoot.Position)
 				rootPart.Velocity = Vector3.new(0, 0, 0)
 				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 
-				-- Movimiento oscilatorio rápido hacia adelante y atrás simulando la animación
-				jerkAnimTime = jerkAnimTime + (dt * 20) -- Velocidad del movimiento
+				jerkAnimTime = jerkAnimTime + (dt * 20)
 				local offsetZ = math.sin(jerkAnimTime) * 0.8
 				rootPart.CFrame = rootPart.CFrame * CFrame.new(0, 0, offsetZ)
 
-				-- Inclinación del torso para hacerlo más realista y gracioso
 				if upperTorso then
 					upperTorso.CFrame = upperTorso.CFrame * CFrame.Angles(math.rad(math.sin(jerkAnimTime * 2) * 25), 0, 0)
 				end
