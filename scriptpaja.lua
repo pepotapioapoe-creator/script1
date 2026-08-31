@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB - FULL VERSION (FIXED ESP BOX & CTRL+CLICK TOGGLE + TROLL & WALLBANG)
+    ZVOLT HUB - FULL VERSION (ULTIMATE WALLBANG & SILENT AIM HEADSHOT)
 ]]--
 
 local Players = game:GetService("Players")
@@ -27,11 +27,11 @@ local settings = {
 	hitboxEnabled = false,
 	spinEnabled = false,
 	ctrlClickTpEnabled = false,
-	-- NUEVAS OPCIONES AÑADIDAS
 	trollTrackEnabled = false,
 	trollOrbitEnabled = false,
-	trollJerkEnabled = false, -- Emote de pie corregido
+	trollJerkEnabled = false,
 	wallbangEnabled = false,
+	silentAimEnabled = false,
 	targetPart = "Head",
 	hitboxSize = 5,
 	spinSpeed = 50,
@@ -68,7 +68,7 @@ UserInputService.InputEnded:Connect(function(input, gp)
 	end
 end)
 
---// Funcionalidad Ctrl + Click (Controlada por variable)
+--// Funcionalidad Ctrl + Click
 UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 and settings.ctrlClickTpEnabled then
@@ -427,19 +427,20 @@ local function createSlider(parent, posY, defaultVal, minVal, maxVal, titlePrefi
 end
 
 -- PESTAÑA: COMBAT
-local cardCombatGen = createCard(pages["combat"], "General", 10, 10, 680, 180)
+local cardCombatGen = createCard(pages["combat"], "General", 10, 10, 680, 215)
 createToggle(cardCombatGen, 0, "Aimbot", function(v) settings.aimEnabled = v end, "aimbot")
 createToggle(cardCombatGen, 36, "Hitbox Extender", function(v) settings.hitboxEnabled = v end, "hitbox")
-createToggle(cardCombatGen, 72, "Wallbang (Atravesar paredes al disparar)", function(v) settings.wallbangEnabled = v end)
-createSlider(cardCombatGen, 108, settings.hitboxSize, 2, 20, "Hitbox Size", function(val) settings.hitboxSize = val end)
+createToggle(cardCombatGen, 72, "Wallbang Absoluto (Atravesar cualquier pared)", function(v) settings.wallbangEnabled = v end)
+createToggle(cardCombatGen, 108, "Autodirección de Balas a la Cabeza (Silent Aim)", function(v) settings.silentAimEnabled = v end)
+createSlider(cardCombatGen, 144, settings.hitboxSize, 2, 20, "Hitbox Size", function(val) settings.hitboxSize = val end)
 
-local cardCombatFov = createCard(pages["combat"], "FOV Settings", 10, 200, 680, 85)
+local cardCombatFov = createCard(pages["combat"], "FOV Settings", 10, 235, 680, 85)
 createSlider(cardCombatFov, 0, settings.fovRadius, 50, 300, "FOV Radius", function(val)
 	settings.fovRadius = val
 	fovFrame.Size = UDim2.new(0, val * 2, 0, val * 2)
 end)
 
-local cardCombatSettings = createCard(pages["combat"], "Target Bone Selection", 10, 295, 680, 85)
+local cardCombatSettings = createCard(pages["combat"], "Target Bone Selection", 10, 330, 680, 85)
 local partsList = {"Head", "HumanoidRootPart", "UpperTorso"}
 local currentPartIndex = 1
 local boneBtn = Instance.new("TextButton")
@@ -907,6 +908,48 @@ local function getClosestPlayerInFOV()
 	return closestPlayer
 end
 
+--// HOOK POTENTE PARA SILENT AIM Y WALLBANG GLOBAL A TRAVÉS DE CUALQUIER PARED
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+	local method = getnamecallmethod()
+	local args = {...}
+	
+	if settings.silentAimEnabled and (method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" or method == "Raycast") then
+		local closest = getClosestPlayerInFOV()
+		if closest and closest.Character then
+			local head = closest.Character:FindFirstChild("Head")
+			if head then
+				if method == "Raycast" then
+					-- Redirección completa para el nuevo motor Raycast (args[1] = Origin, args[2] = Direction)
+					local origin = args[1]
+					if typeof(origin) == "Vector3" then
+						local newDir = (head.Position - origin).Unit * (args[2].Magnitude or 500)
+						args[2] = newDir
+						-- Opcional: ignorar todo el mapa forzando un filtro vacío o ignorando las paredes en los parámetros
+						if typeof(args[3]) == "RaycastParams" then
+							pcall(function()
+								args[3].FilterType = Enum.RaycastFilterType.Exclude
+								args[3].FilterDescendantsInstances = {localPlayer.Character}
+							end)
+						end
+						return oldNamecall(self, unpack(args))
+					end
+				else
+					-- Redirección para llamadas clásicas de Ray
+					local origRay = args[1]
+					if typeof(origRay) == "Ray" then
+						local newDir = (head.Position - origRay.Origin).Unit * origRay.Direction.Magnitude
+						args[1] = Ray.new(origRay.Origin, newDir)
+						return oldNamecall(self, unpack(args))
+					end
+				end
+			end
+		end
+	end
+	
+	return oldNamecall(self, ...)
+end)
+
 local orbitAngle = 0
 local jerkAnimTime = 0
 
@@ -916,25 +959,34 @@ RunService.RenderStepped:Connect(function(dt)
 	local mouseLocation = UserInputService:GetMouseLocation()
 	fovFrame.Position = UDim2.new(0, mouseLocation.X, 0, mouseLocation.Y)
 	fovFrame.Size = UDim2.new(0, settings.fovRadius * 2, 0, settings.fovRadius * 2)
-	fovFrame.Visible = settings.aimEnabled
+	fovFrame.Visible = settings.aimEnabled or settings.silentAimEnabled
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= localPlayer then updateESPForPlayer(player) end
 	end
 
+	-- Wallbang absoluto: Anula por completo la colisión y capacidad de bloqueo de rayos del entorno en todo el mapa
 	if settings.wallbangEnabled then
-		for _, player in ipairs(Players:GetPlayers()) do
-			if player ~= localPlayer and player.Character then
-				for _, part in ipairs(player.Character:GetDescendants()) do
-					if part:IsA("BasePart") then
-						part.CanCollide = false
+		for _, obj in ipairs(workspace:GetDescendants()) do
+			if obj:IsA("BasePart") then
+				-- Evita afectar al jugador local y enemigos para no romper su físicas de movimiento
+				local isCharPart = false
+				for _, p in ipairs(Players:GetPlayers()) do
+					if p.Character and obj:IsDescendantOf(p.Character) then
+						isCharPart = true
+						break
 					end
+				end
+				if not isCharPart then
+					obj.CanCollide = false
+					obj.CanQuery = false
+					obj.CanTouch = false
 				end
 			end
 		end
 	end
 
-	-- LÓGICA DE TROLL: TRACKER, ÓRBITA Y JERK EMOTE CORREGIDO
+	-- LÓGICA DE TROLL
 	local targetPlayer = settings.selectedTpPlayer
 	local rootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
 	local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
@@ -960,14 +1012,11 @@ RunService.RenderStepped:Connect(function(dt)
 				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 			elseif settings.trollJerkEnabled then
 				if humanoid then humanoid.PlatformStand = true end
-				
-				-- Posicionamiento exacto frente a la cara/cuerpo del jugador objetivo
 				local frontPosition = targetRoot.Position + (targetRoot.CFrame.LookVector * 2.2) + Vector3.new(0, 0.2, 0)
 				rootPart.CFrame = CFrame.new(frontPosition, targetRoot.Position)
 				rootPart.Velocity = Vector3.new(0, 0, 0)
 				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 
-				-- Movimiento oscilante agresivo del torso/cámara simulando el gesto
 				jerkAnimTime = jerkAnimTime + (dt * 20)
 				local offsetZ = math.sin(jerkAnimTime) * 1.2
 				rootPart.CFrame = CFrame.new(frontPosition + (targetRoot.CFrame.LookVector * offsetZ), targetRoot.Position)
@@ -1066,7 +1115,8 @@ RunService.Heartbeat:Connect(function(dt)
 			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0, 1, 0) end
 			if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then mv = mv - Vector3.new(0, 1, 0) end
 			
-			rootPart.CFrame = rootPart.CFrame + (mv * settings.flySpeed * dt)	rootPart.Velocity = Vector3.new(0, 0, 0)
+			rootPart.CFrame = rootPart.CFrame + (mv * settings.flySpeed * dt)
+			rootPart.Velocity = Vector3.new(0, 0, 0)
 			rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 		end
 	elseif localPlayer.Character and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.trollJerkEnabled then
