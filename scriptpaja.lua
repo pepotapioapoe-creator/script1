@@ -30,7 +30,7 @@ local settings = {
 	-- NUEVAS OPCIONES AÑADIDAS
 	trollTrackEnabled = false,
 	trollOrbitEnabled = false,
-	trollJerkEnabled = false, -- Emote de pie (mano adelante y atrás)
+	trollJerkEnabled = false, -- Emote de pie corregido
 	wallbangEnabled = false,
 	targetPart = "Head",
 	hitboxSize = 5,
@@ -573,7 +573,7 @@ end)
 local cardTroll = createCard(pages["troll"], "Troll Actions", 10, 10, 680, 160)
 createToggle(cardTroll, 0, "Tracker (Frente a su cara sin animación)", function(v) settings.trollTrackEnabled = v end)
 createToggle(cardTroll, 36, "Orbit (Girar alrededor del seleccionado)", function(v) settings.trollOrbitEnabled = v end)
-createToggle(cardTroll, 72, "Emote De Pie (Mover mano adelante y atrás)", function(v) settings.trollJerkEnabled = v end)
+createToggle(cardTroll, 72, "Emote De Pie (Mover mano adelante y atrás - Jerk)", function(v) settings.trollJerkEnabled = v end)
 
 -- PESTAÑA: MISC
 local cardMisc = createCard(pages["misc"], "Movement & Misc", 10, 10, 680, 420)
@@ -717,7 +717,7 @@ toggleButton.MouseButton1Click:Connect(function()
 	mainFrame.Visible = not mainFrame.Visible
 end)
 
---// LÓGICA DE ESP CORREGIDA (ESP BOX FUNCIONAL)
+--// LÓGICA DE ESP
 local espObjects = {}
 
 local function removeESP(player)
@@ -845,7 +845,6 @@ local function updateESPForPlayer(player)
 						data.Line.Visible = false
 					end
 
-					-- Cálculo correcto de caja 2D adaptada al modelo
 					if settings.espBoxEnabled then
 						local head = char:FindFirstChild("Head")
 						local _, onScreen = camera:WorldToViewportPoint(root.Position)
@@ -923,7 +922,6 @@ RunService.RenderStepped:Connect(function(dt)
 		if player ~= localPlayer then updateESPForPlayer(player) end
 	end
 
-	-- LÓGICA DE WALLBANG
 	if settings.wallbangEnabled then
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player ~= localPlayer and player.Character then
@@ -936,7 +934,7 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- LÓGICA DE TROLL: TRACKER, ÓRBITA Y EMOTE DE PIE
+	-- LÓGICA DE TROLL: TRACKER, ÓRBITA Y JERK EMOTE CORREGIDO
 	local targetPlayer = settings.selectedTpPlayer
 	local rootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
 	local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
@@ -946,10 +944,8 @@ RunService.RenderStepped:Connect(function(dt)
 		if targetRoot then
 			if settings.trollTrackEnabled then
 				if humanoid then humanoid.PlatformStand = true end
-				
 				local frontPosition = targetRoot.Position + (targetRoot.CFrame.LookVector * 2.5) + Vector3.new(0, 0.5, 0)
 				rootPart.CFrame = CFrame.new(frontPosition, targetRoot.Position)
-				
 				rootPart.Velocity = Vector3.new(0, 0, 0)
 				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 			elseif settings.trollOrbitEnabled then
@@ -959,30 +955,22 @@ RunService.RenderStepped:Connect(function(dt)
 				local x = targetRoot.Position.X + math.cos(orbitAngle) * radius
 				local z = targetRoot.Position.Z + math.sin(orbitAngle) * radius
 				local targetPos = Vector3.new(x, targetRoot.Position.Y + 2, z)
-				
 				rootPart.CFrame = CFrame.new(targetPos, targetRoot.Position)
 				rootPart.Velocity = Vector3.new(0, 0, 0)
 				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 			elseif settings.trollJerkEnabled then
 				if humanoid then humanoid.PlatformStand = true end
 				
-				-- Se coloca de pie frente al jugador seleccionado
-				local frontPosition = targetRoot.Position + (targetRoot.CFrame.LookVector * 2.5)
+				-- Posicionamiento exacto frente a la cara/cuerpo del jugador objetivo
+				local frontPosition = targetRoot.Position + (targetRoot.CFrame.LookVector * 2.2) + Vector3.new(0, 0.2, 0)
 				rootPart.CFrame = CFrame.new(frontPosition, targetRoot.Position)
 				rootPart.Velocity = Vector3.new(0, 0, 0)
 				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 
-				-- Manipulación universal de articulaciones (R6 y R15) para mover el brazo hacia adelante y atrás
-				jerkAnimTime = jerkAnimTime + (dt * 12)
-				local char = localPlayer.Character
-				local rShoulder = char:FindFirstChild("Right Shoulder", true) or char:FindFirstChild("RightShoulder", true) or char:FindFirstChild("RightUpperArm", true)
-				
-				if rShoulder then
-					local offsetAngle = math.sin(jerkAnimTime) * 1.0
-					if rShoulder:IsA("Motor6D") then
-						rShoulder.Transform = CFrame.Angles(offsetAngle, 0, 0)
-					end
-				end
+				-- Movimiento oscilante agresivo del torso/cámara simulando el gesto
+				jerkAnimTime = jerkAnimTime + (dt * 20)
+				local offsetZ = math.sin(jerkAnimTime) * 1.2
+				rootPart.CFrame = CFrame.new(frontPosition + (targetRoot.CFrame.LookVector * offsetZ), targetRoot.Position)
 			else
 				if humanoid and not settings.flyEnabled then humanoid.PlatformStand = false end
 			end
@@ -1078,8 +1066,7 @@ RunService.Heartbeat:Connect(function(dt)
 			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0, 1, 0) end
 			if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then mv = mv - Vector3.new(0, 1, 0) end
 			
-			rootPart.CFrame = rootPart.CFrame + (mv * settings.flySpeed * dt)
-			rootPart.Velocity = Vector3.new(0, 0, 0)
+			rootPart.CFrame = rootPart.CFrame + (mv * settings.flySpeed * dt)	rootPart.Velocity = Vector3.new(0, 0, 0)
 			rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 		end
 	elseif localPlayer.Character and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.trollJerkEnabled then
