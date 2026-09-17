@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB - FULL VERSION (FIXED ESP BOX & CTRL+CLICK TOGGLE + TROLL & WALLBANG)
+    ZVOLT HUB - FULL VERSION (IMPROVED BOX & SKELETON ESP)
 ]]--
 
 local Players = game:GetService("Players")
@@ -13,10 +13,14 @@ local mouse = localPlayer:GetMouse()
 --// Configuración General
 local settings = {
 	aimEnabled = false,
+	aimFovRadius = 140,
+	silentAimEnabled = false,
+	silentFovRadius = 100,
 	espEnabled = false,
 	espNamesEnabled = false,
 	espLinesEnabled = true,
 	espBoxEnabled = false,
+	espSkeletonEnabled = true, -- NUEVO: Esqueleto activado por defecto
 	espHealthEnabled = true,
 	ammoEnabled = false,
 	flyEnabled = false,
@@ -27,16 +31,13 @@ local settings = {
 	hitboxEnabled = false,
 	spinEnabled = false,
 	ctrlClickTpEnabled = false,
-	-- NUEVAS OPCIONES AÑADIDAS
 	trollTrackEnabled = false,
 	trollOrbitEnabled = false,
-	trollJerkEnabled = false, -- Emote de pie corregido
 	wallbangEnabled = false,
 	targetPart = "Head",
 	hitboxSize = 5,
 	spinSpeed = 50,
 	smoothing = 0.3,
-	fovRadius = 140,
 	maxDistance = 1500,
 	flySpeed = 50,
 	customSpeed = 32,
@@ -68,7 +69,6 @@ UserInputService.InputEnded:Connect(function(input, gp)
 	end
 end)
 
---// Funcionalidad Ctrl + Click (Controlada por variable)
 UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 and settings.ctrlClickTpEnabled then
@@ -86,6 +86,7 @@ end)
 local COLOR_BG = Color3.fromRGB(13, 13, 17)
 local COLOR_CARD = Color3.fromRGB(18, 18, 24)
 local COLOR_ACCENT = Color3.fromRGB(0, 242, 255)
+local COLOR_SILENT = Color3.fromRGB(255, 0, 128)
 local COLOR_SUBTEXT = Color3.fromRGB(145, 145, 165)
 local COLOR_TEXT = Color3.fromRGB(245, 245, 250)
 local FONT_MAIN = Enum.Font.GothamMedium
@@ -107,22 +108,38 @@ gui.Name = "ZvoltUIContainer_" .. math.random(11111, 99999)
 gui.ResetOnSpawn = false
 gui.Parent = localPlayer:WaitForChild("PlayerGui")
 
---// Círculo de FOV
-local fovFrame = Instance.new("Frame")
-fovFrame.Name = "FovIndicator"
-fovFrame.Size = UDim2.new(0, settings.fovRadius * 2, 0, settings.fovRadius * 2)
-fovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-fovFrame.BackgroundTransparency = 1
-fovFrame.Visible = false
-fovFrame.Parent = gui
+--// Círculos de FOV
+local fovFrameAim = Instance.new("Frame")
+fovFrameAim.Name = "FovIndicatorAim"
+fovFrameAim.Size = UDim2.new(0, settings.aimFovRadius * 2, 0, settings.aimFovRadius * 2)
+fovFrameAim.AnchorPoint = Vector2.new(0.5, 0.5)
+fovFrameAim.BackgroundTransparency = 1
+fovFrameAim.Visible = false
+fovFrameAim.Parent = gui
 
-local fovStroke = Instance.new("UIStroke")
-fovStroke.Color = COLOR_ACCENT
-fovStroke.Thickness = 1.5
-fovStroke.Parent = fovFrame
-local fovCorner = Instance.new("UICorner")
-fovCorner.CornerRadius = UDim.new(1, 0)
-fovCorner.Parent = fovFrame
+local fovStrokeAim = Instance.new("UIStroke")
+fovStrokeAim.Color = COLOR_ACCENT
+fovStrokeAim.Thickness = 1.5
+fovStrokeAim.Parent = fovFrameAim
+local fovCornerAim = Instance.new("UICorner")
+fovCornerAim.CornerRadius = UDim.new(1, 0)
+fovCornerAim.Parent = fovFrameAim
+
+local fovFrameSilent = Instance.new("Frame")
+fovFrameSilent.Name = "FovIndicatorSilent"
+fovFrameSilent.Size = UDim2.new(0, settings.silentFovRadius * 2, 0, settings.silentFovRadius * 2)
+fovFrameSilent.AnchorPoint = Vector2.new(0.5, 0.5)
+fovFrameSilent.BackgroundTransparency = 1
+fovFrameSilent.Visible = false
+fovFrameSilent.Parent = gui
+
+local fovStrokeSilent = Instance.new("UIStroke")
+fovStrokeSilent.Color = COLOR_SILENT
+fovStrokeSilent.Thickness = 1.5
+fovStrokeSilent.Parent = fovFrameSilent
+local fovCornerSilent = Instance.new("UICorner")
+fovCornerSilent.CornerRadius = UDim.new(1, 0)
+fovCornerSilent.Parent = fovFrameSilent
 
 --// PANEL PRINCIPAL
 local mainFrame = Instance.new("Frame")
@@ -207,7 +224,7 @@ local function createPage(name)
 	page.Position = UDim2.new(0, 10, 0, 10)
 	page.BackgroundTransparency = 1
 	page.Visible = false
-	page.CanvasSize = UDim2.new(0, 0, 0, 650)
+	page.CanvasSize = UDim2.new(0, 0, 0, 700)
 	page.ScrollBarThickness = 3
 	page.ScrollBarImageColor3 = COLOR_ACCENT
 	page.Parent = contentArea
@@ -262,7 +279,6 @@ end
 
 showPage("combat")
 
---// COMPONENTES FIJOS
 local function createCard(page, titleText, posX, posY, sizeX, sizeY)
 	local card = Instance.new("Frame")
 	card.Size = UDim2.new(0, sizeX, 0, sizeY)
@@ -330,7 +346,6 @@ local function createToggle(parent, posY, text, callback, settingKey)
 	cc.Parent = checkbox
 
 	local state = false
-	
 	local function updateVisuals(newState)
 		state = newState
 		btn.TextColor3 = state and COLOR_TEXT or COLOR_SUBTEXT
@@ -349,7 +364,6 @@ local function createToggle(parent, posY, text, callback, settingKey)
 	btn.MouseButton1Click:Connect(function()
 		updateVisuals(not state)
 	end)
-	
 	return btn
 end
 
@@ -426,25 +440,31 @@ local function createSlider(parent, posY, defaultVal, minVal, maxVal, titlePrefi
 	end)
 end
 
--- PESTAÑA: COMBAT
-local cardCombatGen = createCard(pages["combat"], "General", 10, 10, 680, 180)
+-- COMBAT
+local cardCombatGen = createCard(pages["combat"], "General", 10, 10, 680, 215)
 createToggle(cardCombatGen, 0, "Aimbot", function(v) settings.aimEnabled = v end, "aimbot")
-createToggle(cardCombatGen, 36, "Hitbox Extender", function(v) settings.hitboxEnabled = v end, "hitbox")
-createToggle(cardCombatGen, 72, "Wallbang (Atravesar paredes al disparar)", function(v) settings.wallbangEnabled = v end)
-createSlider(cardCombatGen, 108, settings.hitboxSize, 2, 20, "Hitbox Size", function(val) settings.hitboxSize = val end)
+createToggle(cardCombatGen, 36, "Silent Aim", function(v) settings.silentAimEnabled = v end)
+createToggle(cardCombatGen, 72, "Hitbox Extender", function(v) settings.hitboxEnabled = v end, "hitbox")
+createToggle(cardCombatGen, 108, "Wallbang", function(v) settings.wallbangEnabled = v end)
+createSlider(cardCombatGen, 144, settings.hitboxSize, 2, 20, "Hitbox Size", function(val) settings.hitboxSize = val end)
 
-local cardCombatFov = createCard(pages["combat"], "FOV Settings", 10, 200, 680, 85)
-createSlider(cardCombatFov, 0, settings.fovRadius, 50, 300, "FOV Radius", function(val)
-	settings.fovRadius = val
-	fovFrame.Size = UDim2.new(0, val * 2, 0, val * 2)
+local cardCombatFovAim = createCard(pages["combat"], "Aimbot FOV Settings", 10, 235, 680, 85)
+createSlider(cardCombatFovAim, 0, settings.aimFovRadius, 50, 300, "Aimbot FOV Radius", function(val)
+	settings.aimFovRadius = val
+	fovFrameAim.Size = UDim2.new(0, val * 2, 0, val * 2)
 end)
 
-local cardCombatSettings = createCard(pages["combat"], "Target Bone Selection", 10, 295, 680, 85)
+local cardCombatFovSilent = createCard(pages["combat"], "Silent Aim FOV Settings (Rosado)", 10, 330, 680, 85)
+createSlider(cardCombatFovSilent, 0, settings.silentFovRadius, 50, 300, "Silent FOV Radius", function(val)
+	settings.silentFovRadius = val
+	fovFrameSilent.Size = UDim2.new(0, val * 2, 0, val * 2)
+end)
+
+local cardCombatSettings = createCard(pages["combat"], "Target Bone Selection", 10, 425, 680, 85)
 local partsList = {"Head", "HumanoidRootPart", "UpperTorso"}
 local currentPartIndex = 1
 local boneBtn = Instance.new("TextButton")
 boneBtn.Size = UDim2.new(1, 0, 0, 30)
-boneBtn.Position = UDim2.new(0, 0, 0, 0)
 boneBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
 boneBtn.TextColor3 = COLOR_ACCENT
 boneBtn.TextSize = 12
@@ -462,25 +482,24 @@ boneBtn.MouseButton1Click:Connect(function()
 	boneBtn.Text = settings.targetPart
 end)
 
--- PESTAÑA: VISUALS
-local cardVisuals = createCard(pages["visuals"], "ESP Settings", 10, 10, 680, 285)
+-- VISUALS (Actualizado con Skeleton y Box mejorada)
+local cardVisuals = createCard(pages["visuals"], "ESP Settings (Improved Skeleton & Box)", 10, 10, 680, 325)
 createToggle(cardVisuals, 0, "ESP Players", function(v) settings.espEnabled = v end, "esp")
 createToggle(cardVisuals, 34, "ESP Names", function(v) settings.espNamesEnabled = v end)
 createToggle(cardVisuals, 68, "ESP Lines", function(v) settings.espLinesEnabled = v end)
-createToggle(cardVisuals, 102, "ESP Box", function(v) settings.espBoxEnabled = v end)
-createToggle(cardVisuals, 136, "ESP Health Hearts", function(v) settings.espHealthEnabled = v end)
-createSlider(cardVisuals, 172, settings.maxDistance, 100, 3000, "Max Distance", function(val) settings.maxDistance = val end)
+createToggle(cardVisuals, 102, "ESP Box (Clean 2D)", function(v) settings.espBoxEnabled = v end)
+createToggle(cardVisuals, 136, "ESP Skeleton (Esqueleto)", function(v) settings.espSkeletonEnabled = v end)
+createToggle(cardVisuals, 170, "ESP Health Hearts", function(v) settings.espHealthEnabled = v end)
+createSlider(cardVisuals, 206, settings.maxDistance, 100, 3000, "Max Distance", function(val) settings.maxDistance = val end)
 
--- PESTAÑA: WEAPON
+-- WEAPON
 local cardWeapon = createCard(pages["weapon"], "Weapon Modifications", 10, 10, 680, 85)
 createToggle(cardWeapon, 0, "Infinite Ammo", function(v) settings.ammoEnabled = v end)
 
--- PESTAÑA: TELEPORT
+-- TELEPORT
 local cardTp = createCard(pages["teleport"], "Player Teleporter List", 10, 10, 680, 345)
-
 local playerListContainer = Instance.new("ScrollingFrame")
 playerListContainer.Size = UDim2.new(1, 0, 0, 200)
-playerListContainer.Position = UDim2.new(0, 0, 0, 0)
 playerListContainer.BackgroundTransparency = 1
 playerListContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
 playerListContainer.ScrollBarThickness = 3
@@ -511,7 +530,6 @@ tpActionBtn.TextSize = 13
 tpActionBtn.Font = FONT_TITLE
 tpActionBtn.Text = "TELEPORT TO PLAYER"
 tpActionBtn.Parent = cardTp
-
 local tac = Instance.new("UICorner")
 tac.CornerRadius = UDim.new(0, 6)
 tac.Parent = tpActionBtn
@@ -522,7 +540,6 @@ local function updatePlayerList()
 	end
 	local players = Players:GetPlayers()
 	playerListContainer.CanvasSize = UDim2.new(0, 0, 0, #players * 30)
-	
 	for i, p in ipairs(players) do
 		if p ~= localPlayer then
 			local pBtn = Instance.new("TextButton")
@@ -535,11 +552,9 @@ local function updatePlayerList()
 			pBtn.TextXAlignment = Enum.TextXAlignment.Left
 			pBtn.LayoutOrder = i
 			pBtn.Parent = playerListContainer
-			
 			local pbc = Instance.new("UICorner")
 			pbc.CornerRadius = UDim.new(0, 5)
 			pbc.Parent = pBtn
-			
 			pBtn.MouseButton1Click:Connect(function()
 				settings.selectedTpPlayer = p
 				selectedLabel.Text = "Selected: " .. p.Name
@@ -569,13 +584,12 @@ tpActionBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- PESTAÑA: TROLL
-local cardTroll = createCard(pages["troll"], "Troll Actions", 10, 10, 680, 160)
+-- TROLL
+local cardTroll = createCard(pages["troll"], "Troll Actions", 10, 10, 680, 120)
 createToggle(cardTroll, 0, "Tracker (Frente a su cara sin animación)", function(v) settings.trollTrackEnabled = v end)
 createToggle(cardTroll, 36, "Orbit (Girar alrededor del seleccionado)", function(v) settings.trollOrbitEnabled = v end)
-createToggle(cardTroll, 72, "Emote De Pie (Mover mano adelante y atrás - Jerk)", function(v) settings.trollJerkEnabled = v end)
 
--- PESTAÑA: MISC
+-- MISC
 local cardMisc = createCard(pages["misc"], "Movement & Misc", 10, 10, 680, 420)
 createToggle(cardMisc, 0, "Ctrl + Click TP", function(v) settings.ctrlClickTpEnabled = v end)
 createToggle(cardMisc, 36, "Fly Mode", function(v) settings.flyEnabled = v end, "fly")
@@ -588,9 +602,8 @@ createToggle(cardMisc, 282, "Noclip", function(v) settings.noclipEnabled = v end
 createToggle(cardMisc, 318, "Bhop", function(v) settings.bhopEnabled = v end)
 createToggle(cardMisc, 354, "Spinbot", function(v) settings.spinEnabled = v end, "spinbot")
 
--- PESTAÑA: KEYBINDS
+-- KEYBINDS
 local cardBinds = createCard(pages["keybinds"], "Keybind Configuration", 10, 10, 680, 260)
-
 local function createKeybindRow(parent, posY, labelName, bindKeyName)
 	local row = Instance.new("Frame")
 	row.Size = UDim2.new(1, 0, 0, 32)
@@ -617,11 +630,9 @@ local function createKeybindRow(parent, posY, labelName, bindKeyName)
 	bindBtn.Font = FONT_MAIN
 	bindBtn.Text = keybinds[bindKeyName] and keybinds[bindKeyName].Name or "None"
 	bindBtn.Parent = row
-
 	local bbc = Instance.new("UICorner")
 	bbc.CornerRadius = UDim.new(0, 5)
 	bbc.Parent = bindBtn
-
 	local bbs = Instance.new("UIStroke")
 	bbs.Color = Color3.fromRGB(50, 50, 70)
 	bbs.Thickness = 1
@@ -671,7 +682,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
---// BOTÓN FLOTANTE MÓVIL
+-- BOTÓN FLOTANTE MÓVIL
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ZvoltFloatingButton"
 toggleButton.Size = UDim2.new(0, 90, 0, 42)
@@ -687,7 +698,6 @@ toggleButton.Parent = gui
 local tbc = Instance.new("UICorner")
 tbc.CornerRadius = UDim.new(0, 8)
 tbc.Parent = toggleButton
-
 local tbs = Instance.new("UIStroke")
 tbs.Color = COLOR_ACCENT
 tbs.Thickness = 1.5
@@ -704,7 +714,7 @@ end)
 UserInputService.InputChanged:Connect(function(input)
 	if draggingBtn and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		local delta = input.Position - dragStartBtn
-		toggleButton.Position = UDim2.new(startPosBtn.X.Scale, startPosBtn.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
+		toggleButton.Position = UDim2.new(startPosStart.X.Scale, startPosBtn.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
 	end
 end)
 UserInputService.InputEnded:Connect(function(input)
@@ -717,7 +727,7 @@ toggleButton.MouseButton1Click:Connect(function()
 	mainFrame.Visible = not mainFrame.Visible
 end)
 
---// LÓGICA DE ESP
+--// SISTEMA DE ESP AVANZADO (SKELETON Y BOX DINÁMICA)
 local espObjects = {}
 
 local function removeESP(player)
@@ -726,8 +736,24 @@ local function removeESP(player)
 		if espObjects[player].Billboard then espObjects[player].Billboard:Destroy() end
 		if espObjects[player].Line then espObjects[player].Line:Destroy() end
 		if espObjects[player].Box then espObjects[player].Box:Destroy() end
+		if espObjects[player].SkeletonLines then
+			for _, boneLine in pairs(espObjects[player].SkeletonLines) do
+				boneLine:Destroy()
+			end
+		end
 		espObjects[player] = nil
 	end
+end
+
+-- Función auxiliar para crear líneas individuales del esqueleto
+local function createSkeletonLine()
+	local l = Instance.new("Frame")
+	l.BackgroundColor3 = COLOR_ACCENT
+	l.BorderSizePixel = 0
+	l.Size = UDim2.new(0, 1, 0, 0)
+	l.Visible = false
+	l.Parent = gui
+	return l
 end
 
 local function updateESPForPlayer(player)
@@ -746,7 +772,7 @@ local function updateESPForPlayer(player)
 			hl.Adornee = char
 			hl.FillColor = COLOR_ACCENT
 			hl.OutlineColor = COLOR_ACCENT
-			hl.FillTransparency = 0.75
+			hl.FillTransparency = 0.85
 			hl.Parent = char
 
 			local bb = Instance.new("BillboardGui")
@@ -790,8 +816,31 @@ local function updateESPForPlayer(player)
 			boxStroke.Thickness = 1.5
 			boxStroke.Parent = box
 
+			-- Conexiones estándar R15 / R6 para el esqueleto
+			local skeletonLines = {
+				Head_UpperTorso = createSkeletonLine(),
+				UpperTorso_LowerTorso = createSkeletonLine(),
+				LeftUpperArm = createSkeletonLine(),
+				LeftLowerArm = createSkeletonLine(),
+				RightUpperArm = createSkeletonLine(),
+				RightLowerArm = createSkeletonLine(),
+				LeftUpperLeg = createSkeletonLine(),
+				LeftLowerLeg = createSkeletonLine(),
+				RightUpperLeg = createSkeletonLine(),
+				RightLowerLeg = createSkeletonLine(),
+			}
+
 			bb.Parent = char
-			espObjects[player] = {Character = char, Highlight = hl, Billboard = bb, Text = txt, HeartsText = heartsTxt, Line = line, Box = box}
+			espObjects[player] = {
+				Character = char, 
+				Highlight = hl, 
+				Billboard = bb, 
+				Text = txt, 
+				HeartsText = heartsTxt, 
+				Line = line, 
+				Box = box,
+				SkeletonLines = skeletonLines
+			}
 		else
 			local data = espObjects[player]
 			local root = char:FindFirstChild("HumanoidRootPart")
@@ -816,16 +865,13 @@ local function updateESPForPlayer(player)
 						local activeHearts = math.ceil(hpPercent * totalHearts)
 						local heartsStr = ""
 						for h = 1, totalHearts do
-							if h <= activeHearts then
-								heartsStr = heartsStr .. "❤️"
-							else
-								heartsStr = heartsStr .. "🖤"
-							end
+							if h <= activeHearts then heartsStr = heartsStr .. "❤️" else heartsStr = heartsStr .. "🖤" end
 						end
 						data.HeartsText.Text = heartsStr
 					end
 					data.Billboard.Enabled = true
 
+					-- Líneas de trazado hacia el jugador
 					if settings.espLinesEnabled then
 						local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
 						if onScreen then
@@ -845,16 +891,17 @@ local function updateESPForPlayer(player)
 						data.Line.Visible = false
 					end
 
+					-- Caja 2D Dinámica y Centrada
 					if settings.espBoxEnabled then
 						local head = char:FindFirstChild("Head")
 						local _, onScreen = camera:WorldToViewportPoint(root.Position)
 						
 						if onScreen and head then
-							local headPos = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
-							local legPos = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
+							local headPos = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.6, 0))
+							local legPos = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 2.7, 0))
 							
 							local height = math.abs(headPos.Y - legPos.Y)
-							local width = height * 0.6
+							local width = height * 0.55
 							
 							data.Box.Size = UDim2.new(0, width, 0, height)
 							data.Box.Position = UDim2.new(0, headPos.X - (width / 2), 0, headPos.Y)
@@ -865,10 +912,64 @@ local function updateESPForPlayer(player)
 					else
 						data.Box.Visible = false
 					end
+
+					-- Skeleton ESP Dinámico
+					if settings.espSkeletonEnabled then
+						local function drawBone(bone1Name, bone2Name, lineKey)
+							local b1 = char:FindFirstChild(bone1Name)
+							local b2 = char:FindFirstChild(bone2Name)
+							local lineObj = data.SkeletonLines[lineKey]
+							
+							if b1 and b2 and lineObj then
+								local p1, on1 = camera:WorldToViewportPoint(b1.Position)
+								local p2, on2 = camera:WorldToViewportPoint(b2.Position)
+								
+								if on1 or on2 then
+									local v1 = Vector2.new(p1.X, p1.Y)
+									local v2 = Vector2.new(p2.X, p2.Y)
+									local magnitude = (v2 - v1).Magnitude
+									
+									lineObj.Size = UDim2.new(0, 1, 0, magnitude)
+									lineObj.Position = UDim2.new(0, (v1.X + v2.X) / 2, 0, (v1.Y + v2.Y) / 2)
+									lineObj.Rotation = math.deg(math.atan2(v2.Y - v1.Y, v2.X - v1.X)) - 90
+									lineObj.Visible = true
+								else
+									lineObj.Visible = false
+								end
+							elseif lineObj then
+								lineObj.Visible = false
+							end
+						end
+
+						-- Soporte compatible R15 principales articulaciones
+						if char:FindFirstChild("UpperTorso") then
+							drawBone("Head", "UpperTorso", "Head_UpperTorso")
+							drawBone("UpperTorso", "LowerTorso", "UpperTorso_LowerTorso")
+							drawBone("UpperTorso", "LeftUpperArm", "LeftUpperArm")
+							drawBone("LeftUpperArm", "LeftLowerArm", "LeftLowerArm")
+							drawBone("UpperTorso", "RightUpperArm", "RightUpperArm")
+							drawBone("RightUpperArm", "RightLowerArm", "RightLowerArm")
+							drawBone("LowerTorso", "LeftUpperLeg", "LeftUpperLeg")
+							drawBone("LeftUpperLeg", "LeftLowerLeg", "LeftLowerLeg")
+							drawBone("LowerTorso", "RightUpperLeg", "RightUpperLeg")
+							drawBone("RightUpperLeg", "RightLowerLeg", "RightLowerLeg")
+						elseif char:FindFirstChild("Torso") then -- Compatibilidad básica R6
+							drawBone("Head", "Torso", "Head_UpperTorso")
+							drawBone("Torso", "Left Arm", "LeftUpperArm")
+							drawBone("Torso", "Right Arm", "RightUpperArm")
+							drawBone("Torso", "Left Leg", "LeftUpperLeg")
+							drawBone("Torso", "Right Leg", "RightUpperLeg")
+						end
+					else
+						for _, lineObj in pairs(data.SkeletonLines) do
+							lineObj.Visible = false
+						end
+					end
 				else
 					data.Billboard.Enabled = false
 					data.Line.Visible = false
 					data.Box.Visible = false
+					for _, lineObj in pairs(data.SkeletonLines) do lineObj.Visible = false end
 				end
 			end
 		end
@@ -879,9 +980,9 @@ end
 
 Players.PlayerRemoving:Connect(function(player) removeESP(player) end)
 
-local function getClosestPlayerInFOV()
+local function getClosestPlayerForAim()
 	local closestPlayer = nil
-	local shortestDistance = settings.fovRadius
+	local shortestDistance = settings.aimFovRadius
 	local mouseLocation = UserInputService:GetMouseLocation()
 
 	for _, player in ipairs(Players:GetPlayers()) do
@@ -895,7 +996,7 @@ local function getClosestPlayerInFOV()
 					local screenPoint, onScreen = camera:WorldToViewportPoint(targetPart.Position)
 					if onScreen then
 						local distCenter = (Vector2.new(screenPoint.X, screenPoint.Y) - mouseLocation).Magnitude
-						if distCenter <= settings.fovRadius and distCenter < shortestDistance then
+						if distCenter <= settings.aimFovRadius and distCenter < shortestDistance then
 							shortestDistance = distCenter
 							closestPlayer = player
 						end
@@ -907,16 +1008,73 @@ local function getClosestPlayerInFOV()
 	return closestPlayer
 end
 
+local function getClosestPlayerForSilent()
+	local closestPlayer = nil
+	local shortestDistance = settings.silentFovRadius
+	local mouseLocation = UserInputService:GetMouseLocation()
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= localPlayer and player.Character and localPlayer.Character then
+			local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+			local targetPart = player.Character:FindFirstChild(settings.targetPart) or player.Character:FindFirstChild("Head")
+			local localRoot = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+			if humanoid and humanoid.Health > 0 and targetPart and localRoot then
+				if (localRoot.Position - targetPart.Position).Magnitude <= settings.maxDistance then
+					local screenPoint, onScreen = camera:WorldToViewportPoint(targetPart.Position)
+					if onScreen then
+						local distCenter = (Vector2.new(screenPoint.X, screenPoint.Y) - mouseLocation).Magnitude
+						if distCenter <= settings.silentFovRadius and distCenter < shortestDistance then
+							shortestDistance = distCenter
+							closestPlayer = player
+						end
+					end
+				end
+			end
+		end
+	end
+	return closestPlayer
+end
+
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+	local method = getnamecallmethod()
+	local args = {...}
+	
+	if settings.silentAimEnabled and (method == "FireServer" or method == "InvokeServer") then
+		local targetPlayer = getClosestPlayerForSilent()
+		if targetPlayer and targetPlayer.Character then
+			local targetPart = targetPlayer.Character:FindFirstChild(settings.targetPart) or targetPlayer.Character:FindFirstChild("Head")
+			if targetPart then
+				for i, v in ipairs(args) do
+					if typeof(v) == "Vector3" then
+						args[i] = targetPart.Position
+					elseif typeof(v) == "CFrame" then
+						args[i] = CFrame.new(v.Position, targetPart.Position)
+					end
+				end
+				return oldNamecall(self, unpack(args))
+			end
+		end
+	end
+	
+	return oldNamecall(self, ...)
+end)
+
 local orbitAngle = 0
-local jerkAnimTime = 0
 
 RunService.RenderStepped:Connect(function(dt)
 	if not camera or not localPlayer.Character then return end
 	
 	local mouseLocation = UserInputService:GetMouseLocation()
-	fovFrame.Position = UDim2.new(0, mouseLocation.X, 0, mouseLocation.Y)
-	fovFrame.Size = UDim2.new(0, settings.fovRadius * 2, 0, settings.fovRadius * 2)
-	fovFrame.Visible = settings.aimEnabled
+	
+	fovFrameAim.Position = UDim2.new(0, mouseLocation.X, 0, mouseLocation.Y)
+	fovFrameAim.Size = UDim2.new(0, settings.aimFovRadius * 2, 0, settings.aimFovRadius * 2)
+	fovFrameAim.Visible = settings.aimEnabled
+
+	fovFrameSilent.Position = UDim2.new(0, mouseLocation.X, 0, mouseLocation.Y)
+	fovFrameSilent.Size = UDim2.new(0, settings.silentFovRadius * 2, 0, settings.silentFovRadius * 2)
+	fovFrameSilent.Visible = settings.silentAimEnabled
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= localPlayer then updateESPForPlayer(player) end
@@ -926,15 +1084,12 @@ RunService.RenderStepped:Connect(function(dt)
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player ~= localPlayer and player.Character then
 				for _, part in ipairs(player.Character:GetDescendants()) do
-					if part:IsA("BasePart") then
-						part.CanCollide = false
-					end
+					if part:IsA("BasePart") then part.CanCollide = false end
 				end
 			end
 		end
 	end
 
-	-- LÓGICA DE TROLL: TRACKER, ÓRBITA Y JERK EMOTE CORREGIDO
 	local targetPlayer = settings.selectedTpPlayer
 	local rootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
 	local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
@@ -958,19 +1113,6 @@ RunService.RenderStepped:Connect(function(dt)
 				rootPart.CFrame = CFrame.new(targetPos, targetRoot.Position)
 				rootPart.Velocity = Vector3.new(0, 0, 0)
 				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-			elseif settings.trollJerkEnabled then
-				if humanoid then humanoid.PlatformStand = true end
-				
-				-- Posicionamiento exacto frente a la cara/cuerpo del jugador objetivo
-				local frontPosition = targetRoot.Position + (targetRoot.CFrame.LookVector * 2.2) + Vector3.new(0, 0.2, 0)
-				rootPart.CFrame = CFrame.new(frontPosition, targetRoot.Position)
-				rootPart.Velocity = Vector3.new(0, 0, 0)
-				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-
-				-- Movimiento oscilante agresivo del torso/cámara simulando el gesto
-				jerkAnimTime = jerkAnimTime + (dt * 20)
-				local offsetZ = math.sin(jerkAnimTime) * 1.2
-				rootPart.CFrame = CFrame.new(frontPosition + (targetRoot.CFrame.LookVector * offsetZ), targetRoot.Position)
 			else
 				if humanoid and not settings.flyEnabled then humanoid.PlatformStand = false end
 			end
@@ -978,7 +1120,7 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 
 	if settings.spinEnabled then
-		if rootPart and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.trollJerkEnabled then 
+		if rootPart and not settings.trollTrackEnabled and not settings.trollOrbitEnabled then 
 			rootPart.CFrame = rootPart.CFrame * CFrame.Angles(0, math.rad(settings.spinSpeed), 0) 
 		end
 	end
@@ -1005,7 +1147,7 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 
 	if settings.aimEnabled and isAimingRightClick then
-		local targetPlayerFov = getClosestPlayerInFOV()
+		local targetPlayerFov = getClosestPlayerForAim()
 		if targetPlayerFov and targetPlayerFov.Character then
 			local targetPart = targetPlayerFov.Character:FindFirstChild(settings.targetPart) or targetPlayerFov.Character:FindFirstChild("Head")
 			if targetPart then
@@ -1037,10 +1179,8 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 
 	local currentHumanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
-	if currentHumanoid and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.trollJerkEnabled then
-		if settings.speedEnabled then
-			currentHumanoid.WalkSpeed = settings.customSpeed
-		end
+	if currentHumanoid and not settings.trollTrackEnabled and not settings.trollOrbitEnabled then
+		if settings.speedEnabled then currentHumanoid.WalkSpeed = settings.customSpeed end
 		if settings.jumpEnabled then
 			currentHumanoid.JumpPower = settings.customJump
 			currentHumanoid.UseJumpPower = true
@@ -1058,7 +1198,7 @@ RunService.Heartbeat:Connect(function(dt)
 		if rootPart and humanoid then
 			humanoid.PlatformStand = true
 			local camCF = camera.CFrame
-            local mv = Vector3.new(0, 0, 0)
+			local mv = Vector3.new(0, 0, 0)
 			if UserInputService:IsKeyDown(Enum.KeyCode.W) then mv = mv + camCF.LookVector end
 			if UserInputService:IsKeyDown(Enum.KeyCode.S) then mv = mv - camCF.LookVector end
 			if UserInputService:IsKeyDown(Enum.KeyCode.A) then mv = mv - camCF.RightVector end
@@ -1066,10 +1206,11 @@ RunService.Heartbeat:Connect(function(dt)
 			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0, 1, 0) end
 			if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then mv = mv - Vector3.new(0, 1, 0) end
 			
-			rootPart.CFrame = rootPart.CFrame + (mv * settings.flySpeed * dt)	rootPart.Velocity = Vector3.new(0, 0, 0)
+			rootPart.CFrame = rootPart.CFrame + (mv * settings.flySpeed * dt)
+			rootPart.Velocity = Vector3.new(0, 0, 0)
 			rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 		end
-	elseif localPlayer.Character and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.trollJerkEnabled then
+	elseif localPlayer.Character then
 		local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
 		if humanoid then humanoid.PlatformStand = false end
 	end
