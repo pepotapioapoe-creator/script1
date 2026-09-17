@@ -1,5 +1,5 @@
---[[
-    ZVOLT - ESP & FOV PURPLES (Cámara 100% Libre, Sin Aimbot)
+--[[--[[
+    ZVOLT ESP PURO (Sin Aimbot, Sin Movimiento de Cámara)
 ]]--
 
 local Players = game:GetService("Players")
@@ -11,19 +11,8 @@ local camera = workspace.CurrentCamera
 local SETTINGS = {
     ESPBox = true,
     ESPName = true,
-    FOV = 160,
 }
 
---// Círculo de FOV (Visual)
-local fovCircle = Drawing.new("Circle")
-fovCircle.Visible = true
-fovCircle.Radius = SETTINGS.FOV
-fovCircle.Color = Color3.fromRGB(255, 0, 128)
-fovCircle.Thickness = 1.5
-fovCircle.Filled = false
-fovCircle.Transparency = 0.8
-
---// ESP Cache
 local espCache = {}
 
 local function clearESP(player)
@@ -34,11 +23,7 @@ local function clearESP(player)
     end
 end
 
---// Loop Principal (Solo ESP y FOV - Tu cámara tiene libertad absoluta)
 RunService.RenderStepped:Connect(function()
-    local mousePos = UserInputService:GetMouseLocation()
-    fovCircle.Position = mousePos
-
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer then
             local char = player.Character
