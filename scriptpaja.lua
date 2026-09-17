@@ -487,6 +487,7 @@ local function createSlider(parent, titlePrefix, defaultVal, minVal, maxVal, cal
     bar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = true apply(i.Position.X) end end)
     UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
     UserInputService.InputChanged:Connect(function(i)
+        -- FIX táctil: usar i.Position (el dedo), no GetMouseLocation (no se actualiza en móvil y el slider saltaba)
         if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then apply(i.Position.X) end
     end)
 end
@@ -957,10 +958,13 @@ local function updateESP(plr)
     if not hum or not lr then return end
     local dist = math.floor((lr.Position - root.Position).Magnitude)
     if dist > settings.maxDistance or hum.Health <= 0 then
-        objs.bb.Enabled = false objs.line.Visible = false objs.box.Visible = false return
+        objs.bb.Enabled = false objs.line.Visible = false objs.box.Visible = false
+        if objs.hl then objs.hl.Enabled = false end
+        return
     end
     local col = espColor()
     objs.bb.Enabled = true
+    if objs.hl then objs.hl.Enabled = true end
     -- nombre + dist
     local txt = ""
     if settings.espNames then txt = plr.DisplayName .. " " end
