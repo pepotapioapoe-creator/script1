@@ -23,6 +23,7 @@ local settings = {
     stickyTarget = true, smoothing = 25, fovRadius = 140, showFov = true, fovRainbow = false,
     targetPart = "Head", hitboxEnabled = false, hitboxSize = 8, wallbangEnabled = false,
     silentAimEnabled = false, silentHitChance = 100, silentPrediction = 0.12,
+    silentBone = "Same as Aimbot",
     -- visuals
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
     espBox = true, espTracer = false, tracerOrigin = "Bottom", espChams = true, espTool = false,
@@ -109,16 +110,17 @@ local function myHum() local c = localPlayer.Character return c and c:FindFirstC
 local function targetRootOf(plr) local c = plr and plr.Character return c and c:FindFirstChild("HumanoidRootPart") end
 local function sameTeam(a, b)
     if not settings.teamCheck then return false end
-    pcall(function()
-        if a.Team ~= nil and b.Team ~= nil and a.Team == b.Team then return true end
-    end)
-    return a.Team ~= nil and b.Team ~= nil and a.TeamColor == b.TeamColor and a.Team == b.Team
+    if a.Team == nil or b.Team == nil then return false end
+    return a.Team == b.Team
 end
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 local function hasWallBetween(fromPos, toPos, ignoreChar)
     if not settings.wallCheck then return false end
-    rayParams.FilterDescendantsInstances = {localPlayer.Character, ignoreChar and ignoreChar.Parent or nil, camera}
+    local filter = {camera}
+    if localPlayer.Character then table.insert(filter, localPlayer.Character) end
+    if ignoreChar and ignoreChar.Parent then table.insert(filter, ignoreChar.Parent) end
+    rayParams.FilterDescendantsInstances = filter
     local res = workspace:Raycast(fromPos, (toPos - fromPos), rayParams)
     if res and res.Instance then
         local m = res.Instance:FindFirstAncestorOfClass("Model")
@@ -141,12 +143,20 @@ local function restoreDefaults()
     end
 end
 
---// GUI raíz
+--// GUI raíz (nombres neutros: los anticheats escanean instancias con "hub", "aim", "esp", "zvolt", etc.)
+local function rndName()
+    local s = ""
+    for i = 1, 10 do s = s .. string.char(math.random(97, 122)) end
+    return "ui_" .. s
+end
 for _, v in ipairs(localPlayer.PlayerGui:GetChildren()) do
-    if v.Name:find("Zvolt") then pcall(function() v:Destroy() end) end
+    pcall(function()
+        if v:GetAttribute("ZV2") or v.Name:find("Zvolt") or v.Name:find("ZVOLT") then v:Destroy() end
+    end)
 end
 local gui = Instance.new("ScreenGui")
-gui.Name = "ZvoltV2_" .. math.random(11111, 99999)
+gui.Name = rndName()
+gui:SetAttribute("ZV2", true)
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 -- STEALTH: siempre PlayerGui. gethui/CoreGui es una bandera clásica para los anticheats.
@@ -222,7 +232,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.4 GHOST" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.7 REAL" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -265,7 +275,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.4 GHOST" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.7 REAL" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -598,7 +608,7 @@ end, "hitbox")
 table.insert(riskyToggles, tHitbox)
 createSlider(c3, "Tamaño Hitbox", settings.hitboxSize, 2, 25, function(v) settings.hitboxSize = v end)
 local tWallbang
-tWallbang = createToggle(c3, "Wallbang ⚠️ detectable", function(v)
+tWallbang = createToggle(c3, "Wallbang (silent tras pared) + X-ray ⚠️", function(v)
     if v and ghostBlock() then tWallbang.Set(false) return end
     settings.wallbangEnabled = v
 end)
@@ -703,7 +713,7 @@ local function refreshPlayers()
     for _, ch in ipairs(plist:GetChildren()) do if ch:IsA("TextButton") then ch:Destroy() end end
     local q = searchBox.Text:lower() local n = 0
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= localPlayer and (q == "" or p.Name:lower():find(q) or p.DisplayName:lower():find(q)) then
+        if p ~= localPlayer and (q == "" or p.Name:lower():find(q, 1, true) or p.DisplayName:lower():find(q, 1, true)) then
             n = n + 1
             local b = Instance.new("TextButton")
             b.Size = UDim2.new(1, 0, 0, 28) b.BackgroundColor3 = (settings.selectedTpPlayer == p) and COLOR_CARD2 or Color3.fromRGB(20, 20, 30)
@@ -878,7 +888,8 @@ local function applyGhostOff()
     pcall(function() workspace.Gravity = 196.2 end)
 end
 local cfGhost = createCard(pages["config"], "👻 Modo Fantasma (anti-ban)", 90)
-createToggle(cfGhost, "MODO FANTASMA (solo ESP + aim camara)", function(v)
+local tGhost
+tGhost = createToggle(cfGhost, "MODO FANTASMA (solo ESP + aim camara)", function(v)
     settings.ghostMode = v
     if v then applyGhostOff() notify("Fantasma", "Solo queda lo invisible al servidor: ESP + aimbot camara + luz.") end
 end)
@@ -897,6 +908,9 @@ for name, th in pairs(THEMES) do
 end
 createToggle(cf1, "ESP arcoíris directo", function(v) settings.espRainbow = v end)
 createButton(cf1, "🔄 Resetear todo", function()
+    settings.ghostMode = false
+    pcall(function() tGhost.Set(false) end)
+    applyGhostOff()
     for _, s in pairs(toggleStates) do pcall(function() s.Set(false) end) end
     restoreDefaults() workspace.Gravity = 196.2 restoreLighting()
     pcall(function() camera.CameraSubject = myHum() camera.FieldOfView = 70 end)
@@ -931,7 +945,15 @@ createDropdown(cf2, "Tecla abrir/cerrar UI", {"RightShift", "Insert", "P", "L"},
 end)
 
 local cf3 = createCard(pages["config"], "👤 Cuenta & Salir", 150)
-createButton(cf3, "🔁 Rejoin (reentrar)", function() game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer) end, false)
+createButton(cf3, "🔁 Rejoin (reentrar)", function()
+    local ok = pcall(function()
+        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
+    end)
+    if not ok then
+        pcall(function() game:GetService("TeleportService"):Teleport(game.PlaceId, localPlayer) end)
+        notify("Rejoin", "Reintentando con teleport normal...")
+    end
+end, false)
 createButton(cf3, "🗑️ Destruir Zvolt (pánico: restaura todo)", function()
     restoreDefaults() restoreLighting()
     pcall(function() workspace.Gravity = 196.2 end)
@@ -998,9 +1020,6 @@ UserInputService.InputBegan:Connect(function(inp, gp)
                 notify("Keybind", feat:upper() .. (ns and " ✅" or " ❌"))
             end
         end
-        -- Ctrl + Click TP
-        if settings.ctrlClickTpEnabled and (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
-        end
     end
     if inp.UserInputType == Enum.UserInputType.MouseButton1 and settings.ctrlClickTpEnabled then
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
@@ -1051,7 +1070,9 @@ local function buildESP(plr, char)
     if settings.espChams then
         local hl = Instance.new("Highlight")
         hl.Adornee = char hl.FillTransparency = 0.7 hl.OutlineTransparency = 0
-        hl.FillColor = espColor() hl.Parent = char objs.hl = hl
+        hl.FillColor = espColor() hl.OutlineColor = espColor()
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- X-ray: se ve a través de paredes
+        hl.Parent = char objs.hl = hl
     end
     local bb = Instance.new("BillboardGui")
     bb.Size = UDim2.new(0, 170, 0, 46) bb.StudsOffset = Vector3.new(0, 2.8, 0) bb.AlwaysOnTop = true bb.Parent = char
@@ -1184,6 +1205,7 @@ end
 settings.silentBone = settings.silentBone or "Same as Aimbot"
 local silentHooked = false
 local silentBypass = false -- en true = son nuestros propios raycasts (wallcheck), no redirigir
+local silentFlash = 0 -- feedback visual: el FOV parpadea cuando el silent redirige un tiro
 local function silentBoneName()
     if not settings.silentBone or settings.silentBone == "Same as Aimbot" then
         return settings.targetPart
@@ -1201,9 +1223,13 @@ local function getSilentHitPos()
         if p ~= localPlayer and isAlive(p) and not sameTeam(p, localPlayer) then
             local part = p.Character and (p.Character:FindFirstChild(bone) or p.Character:FindFirstChild("Head"))
             if part and lr and (lr.Position - part.Position).Magnitude <= settings.maxDistance then
-                silentBypass = true
-                local blocked = hasWallBetween(camera.CFrame.Position, part.Position, part)
-                silentBypass = false
+                -- wallbang ON = el silent ignora paredes (pega tras pared si el server no valida LOS)
+                local blocked = false
+                if not settings.wallbangEnabled then
+                    silentBypass = true
+                    blocked = hasWallBetween(camera.CFrame.Position, part.Position, part)
+                    silentBypass = false
+                end
                 if not blocked then
                     local sp, on = camera:WorldToViewportPoint(part.Position)
                     if on then
@@ -1232,11 +1258,14 @@ function tryEnableSilentAim()
         local chk = checkcaller
         local nc = (newcclosure and newcclosure) or function(f) return f end
         if not (hm and gncm) then error("executor sin hookmetamethod") end
-        -- 1) Hook Raycast / FindPartOnRay (juegos con balas físicas)
+        -- Hook único __namecall: 1) raycasts del cliente 2) remotes con hitreg en servidor
+        -- Muchos juegos NUNCA hacen Raycast en el cliente: mandan FireServer(pos) y el server registra.
+        -- Por eso se escanea cualquier Vector3 cercano a tu punto de mira y se cambia por el enemigo.
         local oldNC
         oldNC = hm(game, "__namecall", nc(function(self, ...)
             local method = gncm()
-            local args = {...}
+            local n = select("#", ...)
+            local args = table.pack(...)
             local function isExploitCall()
                 if chk then local s, r = pcall(chk) if s and r then return true end end
                 return false
@@ -1244,12 +1273,16 @@ function tryEnableSilentAim()
             if settings.silentAimEnabled and not silentBypass and not isExploitCall() then
                 if method == "Raycast" then
                     local origin, dir = args[1], args[2]
-                    if origin and dir and typeof(origin) == "Vector3" and typeof(dir) == "Vector3" then
+                    if origin and dir and typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude > 0 then
                         local hitPos = getSilentHitPos()
                         if hitPos then
-                            local mag = dir.Magnitude
-                            local newDir = (hitPos - origin).Unit * mag
-                            return oldNC(self, origin, newDir, args[3])
+                            local ndir = (hitPos - origin)
+                            if ndir.Magnitude > 0 then
+                                local nargs = {origin, ndir.Unit * dir.Magnitude}
+                                for i = 3, n do nargs[i] = args[i] end
+                                silentFlash = 0.2
+                                return oldNC(self, table.unpack(nargs, 1, math.max(n, 2)))
+                            end
                         end
                     end
                 elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" or method == "FindPartOnRay" then
@@ -1257,10 +1290,42 @@ function tryEnableSilentAim()
                     if ray and typeof(ray) == "Ray" then
                         local hitPos = getSilentHitPos()
                         if hitPos then
-                            local newRay = Ray.new(ray.Origin, (hitPos - ray.Origin).Unit * ray.Direction.Magnitude)
-                            local nargs = {newRay}
-                            for i = 2, #args do nargs[i] = args[i] end
-                            return oldNC(self, table.unpack(nargs))
+                            local ndir = (hitPos - ray.Origin)
+                            if ndir.Magnitude > 0 then
+                                local newRay = Ray.new(ray.Origin, ndir.Unit * ray.Direction.Magnitude)
+                                local nargs = {newRay}
+                                for i = 2, n do nargs[i] = args[i] end
+                                silentFlash = 0.2
+                                return oldNC(self, table.unpack(nargs, 1, math.max(n, 1)))
+                            end
+                        end
+                    end
+                elseif method == "FireServer" or method == "InvokeServer" then
+                    local hitPos = getSilentHitPos()
+                    if hitPos then
+                        silentBypass = true
+                        local aimRef = nil
+                        pcall(function() aimRef = mouse.Hit.Position end)
+                        silentBypass = false
+                        if aimRef then
+                            local nargs = {}
+                            for i = 1, n do nargs[i] = args[i] end
+                            local changed = false
+                            for i = 1, n do
+                                local a = nargs[i]
+                                -- solo Vector3 de POSICION cerca de tu mira (no direcciones, no CFrames de cámara)
+                                if typeof(a) == "Vector3" then
+                                    local d = (a - aimRef).Magnitude
+                                    if d > 3 and d <= 30 then
+                                        nargs[i] = hitPos
+                                        changed = true
+                                    end
+                                end
+                            end
+                            if changed then
+                                silentFlash = 0.2
+                                return oldNC(self, table.unpack(nargs, 1, n))
+                            end
                         end
                     end
                 end
@@ -1301,6 +1366,7 @@ RunService.RenderStepped:Connect(function(dt)
     local wantFov = (settings.aimEnabled or settings.silentAimEnabled) and settings.showFov
     fovFrame.Visible = wantFov
     aimBtn.Visible = settings.aimEnabled and isTouch
+    if silentFlash > 0 then silentFlash = math.max(0, silentFlash - dt) end
     if wantFov then
         fovFrame.Position = UDim2.new(0, ml.X, 0, ml.Y)
         fovFrame.Size = UDim2.new(0, settings.fovRadius * 2, 0, settings.fovRadius * 2)
@@ -1308,6 +1374,8 @@ RunService.RenderStepped:Connect(function(dt)
         if settings.fovRainbow then fovStroke.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
         else fovStroke.Color = Accent() end
         fovDot.BackgroundColor3 = fovStroke.Color
+        -- el círculo se engrosa un instante cuando el silent redirige un tiro (confirmación visual)
+        fovStroke.Thickness = (silentFlash > 0) and 3.5 or 1.6
     end
     -- ESP
     if settings.espEnabled then
@@ -1510,15 +1578,8 @@ task.spawn(function()
                 end
             end
         end
-        if settings.wallbangEnabled and not settings.ghostMode then
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= localPlayer and p.Character then
-                    for _, part in ipairs(p.Character:GetDescendants()) do
-                        if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
-                    end
-                end
-            end
-        end
+        -- wallbang REAL = el silent ignora paredes (ver getSilentHitPos) + X-ray para verlos.
+        -- (El viejo loop de CanCollide no afectaba a las balas y se eliminó.)
         task.wait(0.5)
     end
 end)
@@ -1549,5 +1610,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.4 GHOST", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.4 GHOST] cargado OK - modo fantasma en Config")
+notify("ZVOLT V2.7 REAL", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.7 REAL] cargado OK - silent con FireServer + wallbang real")
