@@ -159,7 +159,7 @@ local function notify(title, text)
     local t = Instance.new("TextLabel")
     t.Size = UDim2.new(1, -30, 0, 20) t.Position = UDim2.new(0, 20, 0, 8)
     t.BackgroundTransparency = 1 t.Font = FONT_BOLD t.TextSize = 12 t.TextColor3 = COLOR_TEXT
-    t.TextXAlignment = Left and Enum.TextXAlignment.Left or Enum.TextXAlignment.Left
+    t.TextXAlignment = Enum.TextXAlignment.Left
     t.Text = title t.Parent = f
     local d = Instance.new("TextLabel")
     d.Size = UDim2.new(1, -30, 0, 30) d.Position = UDim2.new(0, 20, 0, 26)
@@ -264,10 +264,10 @@ statsLabel.TextXAlignment = Enum.TextXAlignment.Left statsLabel.TextColor3 = Col
 statsLabel.Text = "FPS: -- • PING: --" statsLabel.Parent = side
 
 local tabHolder = Instance.new("Frame")
-tabHolder.Size = UDim2.new(1, -16, 1, -210) tabHolder.Position = UDim2.new(0, 8, 0, 112)
+tabHolder.Size = UDim2.new(1, -16, 1, -170) tabHolder.Position = UDim2.new(0, 8, 0, 108)
 tabHolder.BackgroundTransparency = 1 tabHolder.Parent = side
 local tabLayout = Instance.new("UIListLayout")
-tabLayout.Padding = UDim.new(0, 6) tabLayout.SortOrder = Enum.SortOrder.LayoutOrder tabLayout.Parent = tabHolder
+tabLayout.Padding = UDim.new(0, 5) tabLayout.SortOrder = Enum.SortOrder.LayoutOrder tabLayout.Parent = tabHolder
 
 local sideBottom = Instance.new("TextButton")
 sideBottom.Size = UDim2.new(1, -24, 0, 32) sideBottom.Position = UDim2.new(0, 12, 1, -44)
@@ -343,8 +343,12 @@ local function createPage(id)
     local p = Instance.new("ScrollingFrame")
     p.Name = id p.Size = UDim2.new(1, -24, 1, -12) p.Position = UDim2.new(0, 12, 0, 0)
     p.BackgroundTransparency = 1 p.Visible = false p.ScrollBarThickness = 3
-    p.ScrollBarImageColor3 = Accent() p.CanvasSize = UDim2.new(0, 0, 0, 900)
+    p.ScrollBarImageColor3 = Accent() p.CanvasSize = UDim2.new(0, 0, 0, 0)
     p.AutomaticCanvasSize = Enum.AutomaticSize.Y p.Parent = contentArea
+    local pad = Instance.new("UIPadding")
+    pad.PaddingTop = UDim.new(0, 4) pad.PaddingBottom = UDim.new(0, 16) pad.Parent = p
+    local lay = Instance.new("UIListLayout")
+    lay.Padding = UDim.new(0, 10) lay.SortOrder = Enum.SortOrder.LayoutOrder lay.Parent = p
     pages[id] = p return p
 end
 for _, t in ipairs(TAB_INFO) do createPage(t.id) end
@@ -355,12 +359,14 @@ local function showPage(id, title, desc)
         local active = (k == id)
         tween(b, TweenInfo.new(0.2), {BackgroundTransparency = active and 0 or 1})
         b.TextLabel.TextColor3 = active and Color3.fromRGB(255,255,255) or COLOR_SUBTEXT
-        if active then stroke(b, Accent(), 1) TagAccent(b:FindFirstChildOfClass("UIStroke"), "Color") end
+        local old = b:FindFirstChildOfClass("UIStroke")
+        if old then old:Destroy() end
+        if active then TagAccent(stroke(b, Accent(), 1), "Color") end
     end
 end
 for i, t in ipairs(TAB_INFO) do
     local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1, 0, 0, 36) b.LayoutOrder = i
+    b.Size = UDim2.new(1, 0, 0, 32) b.LayoutOrder = i
     b.BackgroundColor3 = (i == 1) and COLOR_CARD2 or COLOR_CARD
     b.BackgroundTransparency = (i == 1) and 0 or 1
     b.Text = "" b.Parent = tabHolder corner(b, 8)
@@ -381,22 +387,37 @@ showPage("combat", "Combat", "Apunta, pega y domina.")
 
 --// Componentes modernos
 local toggleStates = {}
+local cardCount = 0
 local function createCard(page, titleText, height)
+    cardCount = cardCount + 1
     local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, -12, 0, height) card.BackgroundColor3 = COLOR_CARD card.Parent = page
+    card.Size = UDim2.new(1, -12, 0, 0)
+    card.AutomaticSize = Enum.AutomaticSize.Y
+    card.BackgroundColor3 = COLOR_CARD card.Parent = page
+    card.LayoutOrder = cardCount
     corner(card, 10) stroke(card, Color3.fromRGB(32, 32, 48), 1)
-    local pad = Instance.new("UIPadding") pad.PaddingLeft = UDim.new(0, 14) pad.PaddingRight = UDim.new(0, 14) pad.PaddingTop = UDim.new(0, 12) pad.Parent = card
+    local pad = Instance.new("UIPadding") pad.PaddingLeft = UDim.new(0, 14) pad.PaddingRight = UDim.new(0, 14) pad.PaddingTop = UDim.new(0, 12) pad.PaddingBottom = UDim.new(0, 14) pad.Parent = card
+    local layCard = Instance.new("UIListLayout") layCard.Padding = UDim.new(0, 6) layCard.SortOrder = Enum.SortOrder.LayoutOrder layCard.Parent = card
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 20) title.BackgroundTransparency = 1
     title.Font = FONT_BOLD title.TextSize = 12 title.TextColor3 = COLOR_TEXT
     title.TextXAlignment = Enum.TextXAlignment.Left title.Text = titleText:upper() title.Parent = card
+    title.LayoutOrder = 1
     local accentBar = Instance.new("Frame")
-    accentBar.Size = UDim2.new(0, 26, 0, 3) accentBar.Position = UDim2.new(0, 14, 0, 34)
+    accentBar.Size = UDim2.new(0, 26, 0, 3)
     accentBar.BackgroundColor3 = Accent() accentBar.Parent = card corner(accentBar, 99) TagAccent(accentBar)
+    accentBar.LayoutOrder = 2
     local box = Instance.new("Frame")
-    box.Size = UDim2.new(1, 0, 1, -48) box.Position = UDim2.new(0, 0, 0, 42)
+    box.Size = UDim2.new(1, 0, 0, 0)
+    box.AutomaticSize = Enum.AutomaticSize.Y
     box.BackgroundTransparency = 1 box.Parent = card
+    box.LayoutOrder = 3
     local lay = Instance.new("UIListLayout") lay.Padding = UDim.new(0, 8) lay.SortOrder = Enum.SortOrder.LayoutOrder lay.Parent = box
+    -- altura mínima para que no se vea vacía (el height que se pasaba antes)
+    if height and height > 0 then
+        local minPad = Instance.new("Frame")
+        minPad.Size = UDim2.new(1, 0, 0, 0) minPad.BackgroundTransparency = 1 minPad.LayoutOrder = 999 minPad.Parent = box
+    end
     return box
 end
 
