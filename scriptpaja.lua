@@ -1,4 +1,4 @@
----[[
+--[[
     ZVOLT HUB V2 — FRESH EDITION
     UI moderna + más funciones + mejor rendimiento
     By Zvolt
