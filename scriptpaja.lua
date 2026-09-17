@@ -23,7 +23,8 @@ local settings = {
     stickyTarget = true, smoothing = 25, fovRadius = 140, showFov = true, fovRainbow = false,
     targetPart = "Head", hitboxEnabled = false, hitboxSize = 8, wallbangEnabled = false,
     silentAimEnabled = false, silentHitChance = 100, silentPrediction = 0.12,
-    silentBone = "Same as Aimbot",
+    silentBone = "Same as Aimbot", silentFov = 200,
+    magicBulletsEnabled = false,
     -- visuals
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
     espBox = true, espTracer = false, tracerOrigin = "Bottom", espChams = true, espTool = false,
@@ -232,7 +233,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.7 REAL" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.10 MAGIC" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -275,7 +276,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.7 REAL" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.10 MAGIC" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -580,10 +581,18 @@ tSilent = createToggle(c4, "Silent Aim ⚠️ hook detectable", function(v)
 end, "silent")
 table.insert(riskyToggles, tSilent)
 createSlider(c4, "Hit Chance %", settings.silentHitChance, 1, 100, function(v) settings.silentHitChance = v end)
+createSlider(c4, "Silent FOV (área propia)", settings.silentFov, 40, 500, function(v) settings.silentFov = v end)
 createSlider(c4, "Prediccion", 12, 0, 50, function(v) settings.silentPrediction = v / 100 end)
 createDropdown(c4, "Hueso silent", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "Same as Aimbot"}, "Same as Aimbot", function(v)
     settings.silentBone = v
 end)
+local tMagic
+tMagic = createToggle(c4, "Magic Bullets (balas teledirigidas) ⚠️", function(v)
+    if v and ghostBlock() then tMagic.Set(false) return end
+    settings.magicBulletsEnabled = v
+    notify("Magic Bullets", v and "Activadas (usan FOV + predicción del silent)" or "Desactivadas")
+end)
+table.insert(riskyToggles, tMagic)
 
 local c1 = createCard(pages["combat"], "🎯 Aimbot", 250)
 createToggle(c1, "Aimbot (click derecho)", function(v) settings.aimEnabled = v currentAimTarget = nil end, "aimbot")
@@ -884,6 +893,7 @@ local function applyGhostOff()
     settings.infJumpEnabled = false settings.ctrlClickTpEnabled = false settings.trollTrackEnabled = false
     settings.trollOrbitEnabled = false settings.flingEnabled = false settings.headSitEnabled = false
     settings.ammoEnabled = false settings.rapidFire = false
+    settings.magicBulletsEnabled = false
     restoreDefaults()
     pcall(function() workspace.Gravity = 196.2 end)
 end
@@ -957,6 +967,7 @@ end, false)
 createButton(cf3, "🗑️ Destruir Zvolt (pánico: restaura todo)", function()
     restoreDefaults() restoreLighting()
     pcall(function() workspace.Gravity = 196.2 end)
+    pcall(function() RunService:UnbindFromRenderStep("ZV_Aimbot") end)
     pcall(function() camera.CameraSubject = myHum() camera.FieldOfView = 70 end) gui:Destroy()
 end, false)
 
@@ -1168,24 +1179,39 @@ local function updateESP(plr)
 end
 Players.PlayerRemoving:Connect(function(plr) clearESP(plr) espCharOf[plr] = nil end)
 
+-- Punto de referencia del aim: cursor en PC, centro de pantalla en táctil (no hay cursor)
+local function aimRefPoint()
+    if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+        local vs = camera.ViewportSize
+        return Vector2.new(vs.X / 2, vs.Y / 2)
+    end
+    return UserInputService:GetMouseLocation()
+end
+-- Parte a apuntar con fallbacks para juegos con rigs raros (sin Head, etc.)
+local function getAimPart(char, bone)
+    if not char then return nil end
+    return char:FindFirstChild(bone) or char:FindFirstChild("Head")
+        or char:FindFirstChild("HumanoidRootPart") or char:FindFirstChildWhichIsA("BasePart")
+end
+
 --// Aimbot con wall/team check
 local function closestTarget()
     if settings.stickyTarget and currentAimTarget and isAlive(currentAimTarget) then
         local tp = currentAimTarget.Character and (currentAimTarget.Character:FindFirstChild(settings.targetPart) or currentAimTarget.Character:FindFirstChild("Head"))
         if tp then
             local sp, on = camera:WorldToViewportPoint(tp.Position)
-            if on and (Vector2.new(sp.X, sp.Y) - UserInputService:GetMouseLocation()).Magnitude <= settings.fovRadius then
+            if on and (Vector2.new(sp.X, sp.Y) - aimRefPoint()).Magnitude <= settings.fovRadius then
                 return currentAimTarget
             end
         end
         currentAimTarget = nil
     end
     local best, bestD = nil, settings.fovRadius
-    local ml = UserInputService:GetMouseLocation()
+    local ml = aimRefPoint()
     local lr = myRoot()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= localPlayer and isAlive(p) and not sameTeam(p, localPlayer) then
-            local tp = p.Character:FindFirstChild(settings.targetPart) or p.Character:FindFirstChild("Head")
+            local tp = getAimPart(p.Character, settings.targetPart)
             if tp and lr and (lr.Position - tp.Position).Magnitude <= settings.maxDistance then
                 if not hasWallBetween(camera.CFrame.Position, tp.Position, tp) then
                     local sp, on = camera:WorldToViewportPoint(tp.Position)
@@ -1216,12 +1242,12 @@ local function getSilentHitPos()
     if not settings.silentAimEnabled then return nil end
     if math.random(1, 100) > (settings.silentHitChance or 100) then return nil end
     local bone = silentBoneName()
-    local ml = UserInputService:GetMouseLocation()
+    local ml = aimRefPoint()
     local lr = myRoot()
-    local bestPart, bestD = nil, settings.fovRadius
+    local bestPart, bestD = nil, settings.silentFov
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= localPlayer and isAlive(p) and not sameTeam(p, localPlayer) then
-            local part = p.Character and (p.Character:FindFirstChild(bone) or p.Character:FindFirstChild("Head"))
+            local part = getAimPart(p.Character, bone)
             if part and lr and (lr.Position - part.Position).Magnitude <= settings.maxDistance then
                 -- wallbang ON = el silent ignora paredes (pega tras pared si el server no valida LOS)
                 local blocked = false
@@ -1234,7 +1260,7 @@ local function getSilentHitPos()
                     local sp, on = camera:WorldToViewportPoint(part.Position)
                     if on then
                         local d = (Vector2.new(sp.X, sp.Y) - ml).Magnitude
-                        if d <= settings.fovRadius and d < bestD then
+                        if d <= settings.silentFov and d < bestD then
                             bestD = d bestPart = part
                         end
                     end
@@ -1250,6 +1276,50 @@ local function getSilentHitPos()
     end
     return nil
 end
+--// MAGIC BULLETS: tus proyectiles doblan su vuelo hacia el objetivo (respeta FOV, equipo, hitchance).
+-- Detecta piezas que NACEN cerca tuyo, en movimiento y alejándose (tus balas), e ignora el resto.
+local trackedBullets = {}
+workspace.DescendantAdded:Connect(function(inst)
+    if not settings.magicBulletsEnabled or settings.ghostMode then return end
+    if not inst or not inst:IsA("BasePart") then return end
+    if inst.Anchored then return end
+    local mr = myRoot()
+    if not mr then return end
+    local model = inst:FindFirstAncestorOfClass("Model")
+    if model and (Players:GetPlayerFromCharacter(model) or model == localPlayer.Character) then return end
+    local off = inst.Position - mr.Position
+    if off.Magnitude < 1 or off.Magnitude > 25 then return end -- nació pegado o lejos: no es tu bala
+    local vel = inst.AssemblyLinearVelocity
+    if vel.Magnitude < 20 then return end -- quieto: decoración del mapa, no bala
+    if vel.Unit:Dot(off.Unit) < 0.2 then return end -- viene HACIA ti: es bala enemiga, no tocar
+    local count = 0
+    for _ in pairs(trackedBullets) do count = count + 1 end
+    if count >= 40 then return end
+    -- hitchance una sola vez por bala: o vuela teledirigida o recta (parece legit)
+    local _, tgt = getSilentHitPos()
+    trackedBullets[inst] = {t0 = tick(), target = (tgt and tgt.Parent) and tgt or nil}
+end)
+RunService.Heartbeat:Connect(function()
+    if not settings.magicBulletsEnabled or settings.ghostMode then return end
+    local now = tick()
+    for part, info in pairs(trackedBullets) do
+        local tgt = info.target
+        if (not part) or (not part.Parent) or (now - info.t0) > 3 then
+            trackedBullets[part] = nil
+        elseif tgt and tgt.Parent then
+            local pred = settings.silentPrediction or 0.12
+            local aim = tgt.Position + (tgt.Velocity * pred)
+            if (aim - part.Position).Magnitude > 4 then
+                local sp = part.AssemblyLinearVelocity.Magnitude
+                if sp > 5 then
+                    -- conserva la velocidad original: SOLO dobla la dirección (natural y menos detectable)
+                    part.AssemblyLinearVelocity = (aim - part.Position).Unit * sp
+                    pcall(function() part.CFrame = CFrame.new(part.Position, aim) end)
+                end
+            end
+        end
+    end
+end)
 function tryEnableSilentAim()
     if silentHooked then return end
     local ok, msg = pcall(function()
@@ -1357,19 +1427,70 @@ function tryEnableSilentAim()
     end
 end
 
+-- El aimbot se aplica DESPUÉS de que el juego actualice su cámara.
+-- (Muchos juegos reescriben camera.CFrame cada frame y pisaban el aim anterior.)
+local hasMouseMove = (mousemoverel ~= nil)
+local useBoundAim = false
+local function runAimbot()
+    if not camera then return end
+    local aiming = settings.aimEnabled and (aimingPC or aimingMobile)
+    snapLine.Visible = false
+    if not aiming then
+        if not settings.stickyTarget then currentAimTarget = nil end
+        return
+    end
+    local tgt = closestTarget()
+    if tgt and tgt.Character then
+        local part = getAimPart(tgt.Character, settings.targetPart)
+        if part then
+            local ml = aimRefPoint()
+            local sp, on = camera:WorldToViewportPoint(part.Position)
+            if on then
+                local startV = Vector2.new(ml.X, ml.Y) local endV = Vector2.new(sp.X, sp.Y)
+                local d = (endV - startV).Magnitude
+                if d > 2 then
+                    snapLine.Size = UDim2.new(0, 1.5, 0, d)
+                    snapLine.Position = UDim2.new(0, (startV.X + endV.X) / 2, 0, (startV.Y + endV.Y) / 2)
+                    snapLine.Rotation = math.deg(math.atan2(endV.Y - startV.Y, endV.X - startV.X)) - 90
+                    snapLine.Visible = true
+                end
+                local alpha = math.clamp(settings.smoothing / 100, 0.05, 1)
+                if settings.aimMode == "Mouse" and hasMouseMove then
+                    pcall(function()
+                        mousemoverel((sp.X - ml.X) * alpha, (sp.Y - ml.Y) * alpha)
+                    end)
+                else
+                    -- Camera (y fallback si el executor no tiene mousemoverel)
+                    pcall(function()
+                        camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, part.Position), alpha)
+                    end)
+                end
+            end
+        end
+    end
+end
+pcall(function() RunService:UnbindFromRenderStep("ZV_Aimbot") end)
+if pcall(function()
+    RunService:BindToRenderStep("ZV_Aimbot", Enum.RenderPriority.Camera.Value + 1, function() runAimbot() end)
+end) then
+    useBoundAim = true
+end
+
 --// Loops principales
 local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 RunService.RenderStepped:Connect(function(dt)
     if not camera then return end
     -- FOV UI
-    local ml = UserInputService:GetMouseLocation()
+    local ml = aimRefPoint()
     local wantFov = (settings.aimEnabled or settings.silentAimEnabled) and settings.showFov
     fovFrame.Visible = wantFov
     aimBtn.Visible = settings.aimEnabled and isTouch
     if silentFlash > 0 then silentFlash = math.max(0, silentFlash - dt) end
     if wantFov then
+        -- cada aim usa su propio radio: el círculo muestra el del aimbot, o el del silent si solo ese está activo
+        local fr = (settings.aimEnabled and settings.fovRadius) or settings.silentFov
         fovFrame.Position = UDim2.new(0, ml.X, 0, ml.Y)
-        fovFrame.Size = UDim2.new(0, settings.fovRadius * 2, 0, settings.fovRadius * 2)
+        fovFrame.Size = UDim2.new(0, fr * 2, 0, fr * 2)
         fovDot.Position = UDim2.new(0.5, 0, 0.5, 0)
         if settings.fovRainbow then fovStroke.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
         else fovStroke.Color = Accent() end
@@ -1383,41 +1504,9 @@ RunService.RenderStepped:Connect(function(dt)
     else
         for p, _ in pairs(espData) do clearESP(p) end
     end
-    -- Aimbot
-    local aiming = settings.aimEnabled and (aimingPC or aimingMobile)
-    snapLine.Visible = false
-    if aiming then
-        local tgt = closestTarget()
-        if tgt and tgt.Character then
-            local part = tgt.Character:FindFirstChild(settings.targetPart) or tgt.Character:FindFirstChild("Head")
-            if part then
-                local sp, on = camera:WorldToViewportPoint(part.Position)
-                if on then
-                    -- snapline al objetivo
-                    local startV = Vector2.new(ml.X, ml.Y) local endV = Vector2.new(sp.X, sp.Y)
-                    local d = (endV - startV).Magnitude
-                    if d > 2 then
-                        snapLine.Size = UDim2.new(0, 1.5, 0, d)
-                        snapLine.Position = UDim2.new(0, (startV.X + endV.X) / 2, 0, (startV.Y + endV.Y) / 2)
-                        snapLine.Rotation = math.deg(math.atan2(endV.Y - startV.Y, endV.X - startV.X)) - 90
-                        snapLine.Visible = true
-                    end
-                    local alpha = math.clamp(settings.smoothing / 100, 0.05, 1)
-                    if settings.aimMode == "Camera" then
-                        pcall(function()
-                            camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, part.Position), alpha)
-                        end)
-                    else
-                        pcall(function()
-                            mousemoverel((sp.X - ml.X) * alpha, (sp.Y - ml.Y) * alpha)
-                        end)
-                    end
-                end
-            end
-        end
-    else
-        if not settings.stickyTarget then currentAimTarget = nil end
-    end
+    -- Aimbot: corre DESPUÉS de la cámara del juego vía BindToRenderStep (ver runAimbot).
+    -- Si el bind falló, se corre aquí como antes.
+    if not useBoundAim then runAimbot() end
     -- Troll track / orbit / head sit / fling
     local tp = settings.selectedTpPlayer
     local r = myRoot() local h = myHum()
@@ -1610,5 +1699,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.7 REAL", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.7 REAL] cargado OK - silent con FireServer + wallbang real")
+notify("ZVOLT V2.10 MAGIC", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.10 MAGIC] cargado OK - magic bullets en Combat")
