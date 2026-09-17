@@ -26,6 +26,7 @@ local settings = {
     silentBone = "Same as Aimbot", silentFov = 200,
     magicBulletsEnabled = false,
     spyEnabled = false,
+    triggerbot = false, triggerDelay = 150, triggerWarned = false,
     aimDebug = false,
     aimAuto = false,
     aimClassic = false,
@@ -38,16 +39,19 @@ local settings = {
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
     espBox = true, espTracer = false, tracerOrigin = "Bottom", espChams = true, espTool = false,
     espRainbow = false, maxDistance = 1500,
+    espXray = true,
     -- movement
     flyEnabled = false, flySpeed = 60, noclipEnabled = false, speedEnabled = false, customSpeed = 32,
     jumpEnabled = false, customJump = 100, bhopEnabled = false, infJumpEnabled = false,
     spinEnabled = false, spinSpeed = 50, ctrlClickTpEnabled = false, gravity = 196.2, antiVoid = false,
+    tapTp = false, freecam = false,
     -- troll / tp
     trollTrackEnabled = false, trollOrbitEnabled = false, orbitSpeed = 3, orbitRadius = 6, trackDist = 3,
     flingEnabled = false, headSitEnabled = false, spectateEnabled = false,
-    selectedTpPlayer = nil, savedPos = nil,
+    selectedTpPlayer = nil, savedPos = nil, tpFollow = false,
     -- weapon/world
     ammoEnabled = false, rapidFire = false, fullbright = false, fpsBoosted = false, antiAfk = false,
+    noShadows = false,
     -- ui
     uiToggleKey = Enum.KeyCode.RightShift, theme = "Cyan", uiTransparency = 0,
     ghostMode = false,
@@ -248,7 +252,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.24 FEEL" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.25 FULL" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -291,7 +295,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.24 FEEL" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.25 FULL" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -596,39 +600,45 @@ tSilent = createToggle(c4, "Silent Aim ⚠️ hook detectable", function(v)
 end, "silent")
 table.insert(riskyToggles, tSilent)
 createSlider(c4, "Hit Chance %", settings.silentHitChance, 1, 100, function(v) settings.silentHitChance = v end)
-createSlider(c4, "Silent FOV (área propia)", settings.silentFov, 40, 500, function(v) settings.silentFov = v end)
+createSlider(c4, "Silent FOV", settings.silentFov, 40, 500, function(v) settings.silentFov = v end)
 createSlider(c4, "Prediccion", 12, 0, 50, function(v) settings.silentPrediction = v / 100 end)
 createDropdown(c4, "Hueso silent", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "Same as Aimbot"}, "Same as Aimbot", function(v)
     settings.silentBone = v
 end)
-createToggle(c4, "Team Check (no apuntar aliados)", function(v) settings.teamCheck = v end)
-createToggle(c4, "Wall Check (respeta paredes)", function(v) settings.wallCheck = v end)
+createToggle(c4, "Team Check", function(v) settings.teamCheck = v end)
+createToggle(c4, "Wall Check", function(v) settings.wallCheck = v end)
 local tMagic
-tMagic = createToggle(c4, "Magic Bullets (balas teledirigidas) ⚠️", function(v)
+tMagic = createToggle(c4, "Magic Bullets ⚠️", function(v)
     if v and ghostBlock() then tMagic.Set(false) return end
     settings.magicBulletsEnabled = v
     notify("Magic Bullets", v and "Activadas (usan FOV + predicción del silent)" or "Desactivadas")
 end)
 table.insert(riskyToggles, tMagic)
-createToggle(c4, "SPY del arma (ver qué manda) 🔍", function(v)
+createToggle(c4, "SPY del arma 🔍", function(v)
     settings.spyEnabled = v
     if v then tryEnableSpy() notify("Spy", "Dispara varias veces y abre la consola con F9.") end
 end)
 
 local c1 = createCard(pages["combat"], "🎯 Aimbot", 250)
-createToggle(c1, "Aimbot (click derecho)", function(v) settings.aimEnabled = v end, "aimbot")
+createToggle(c1, "Aimbot · click derecho", function(v) settings.aimEnabled = v end, "aimbot")
 createDropdown(c1, "Hueso objetivo", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}, "Head", function(v) settings.targetPart = v end)
-createToggle(c1, "Modo AUTO (apunta solo, sin clic)", function(v) settings.aimAuto = v end)
-createToggle(c1, "SNAP directo (sin suavizado)", function(v) settings.aimSnap = v end)
-createToggle(c1, "Forzar cámara (si el juego la pisa)", function(v) settings.aimScriptable = v end)
+createToggle(c1, "Modo AUTO", function(v) settings.aimAuto = v end)
+createToggle(c1, "SNAP directo", function(v) settings.aimSnap = v end)
 createToggle(c1, "Incluir NPCs/bots", function(v) settings.aimNpcs = v end)
-createToggle(c1, "Diagnóstico profundo (F9)", function(v) settings.aimDebug = v end)
-createToggle(c1, "Fuerza bruta (sin humanoid/vida)", function(v) settings.aimBrute = v end)
+createToggle(c1, "Diagnóstico F9", function(v) settings.aimDebug = v end)
+createToggle(c1, "Fuerza bruta", function(v) settings.aimBrute = v end)
+local tTrigger
+tTrigger = createToggle(c1, "Triggerbot · auto-disparo", function(v)
+    if v and ghostBlock() then tTrigger.Set(false) return end
+    settings.triggerbot = v
+end)
+table.insert(riskyToggles, tTrigger)
+createSlider(c1, "Retraso disparo", settings.triggerDelay, 0, 500, function(v) settings.triggerDelay = v end)
 
 local c2 = createCard(pages["combat"], "⭕ FOV & Suavizado", 190)
 createSlider(c2, "Radio FOV", settings.fovRadius, 40, 400, function(v) settings.fovRadius = v end)
 createSlider(c2, "Suavizado", settings.smoothing, 1, 100, function(v) settings.smoothing = v end)
-createSlider(c2, "Zona muerta (px, tu mouse manda)", settings.aimDeadzone, 0, 30, function(v) settings.aimDeadzone = v end)
+createSlider(c2, "Zona muerta", settings.aimDeadzone, 0, 30, function(v) settings.aimDeadzone = v end)
 createToggle(c2, "Mostrar círculo FOV", function(v) settings.showFov = v end, nil, true)
 createToggle(c2, "FOV arcoíris 🌈", function(v) settings.fovRainbow = v end)
 
@@ -641,7 +651,7 @@ end, "hitbox")
 table.insert(riskyToggles, tHitbox)
 createSlider(c3, "Tamaño Hitbox", settings.hitboxSize, 2, 25, function(v) settings.hitboxSize = v end)
 local tWallbang
-tWallbang = createToggle(c3, "Wallbang (silent tras pared) + X-ray ⚠️", function(v)
+tWallbang = createToggle(c3, "Wallbang + X-ray ⚠️", function(v)
     if v and ghostBlock() then tWallbang.Set(false) return end
     settings.wallbangEnabled = v
 end)
@@ -657,6 +667,7 @@ createToggle(v1, "Caja 2D (Box)", function(v) settings.espBox = v end, nil, true
 createToggle(v1, "Tracers / Líneas", function(v) settings.espTracer = v end)
 createToggle(v1, "Chams (resaltado)", function(v) settings.espChams = v end, nil, true)
 createToggle(v1, "Ver herramienta en mano 🔫", function(v) settings.espTool = v end)
+createToggle(v1, "Chams X-ray", function(v) settings.espXray = v end, nil, true)
 
 local v2 = createCard(pages["visuals"], "🎨 Estilo ESP", 160)
 createDropdown(v2, "Origen de líneas", {"Bottom", "Center", "Mouse"}, "Bottom", function(v) settings.tracerOrigin = v end)
@@ -666,7 +677,7 @@ createSlider(v2, "Distancia máxima", settings.maxDistance, 100, 5000, function(
 -- MOVEMENT
 local m1 = createCard(pages["movement"], "✈️ Vuelo & Noclip", 150)
 local tFly
-tFly = createToggle(m1, "Fly ⚠️ detectable (WASD + Espacio/Shift, joystick en móvil)", function(v)
+tFly = createToggle(m1, "Fly ⚠️", function(v)
     if v and ghostBlock() then tFly.Set(false) return end
     settings.flyEnabled = v
 end, "fly")
@@ -695,7 +706,7 @@ end, "jump")
 table.insert(riskyToggles, tJump)
 createSlider(m2, "JumpPower", settings.customJump, 50, 350, function(v) settings.customJump = v end)
 local tBhop
-tBhop = createToggle(m2, "Bunny Hop (auto-salto)", function(v)
+tBhop = createToggle(m2, "Bunny Hop", function(v)
     if v and ghostBlock() then tBhop.Set(false) return end
     settings.bhopEnabled = v
 end)
@@ -721,10 +732,58 @@ tCtrl = createToggle(m3, "Ctrl + Click TP 🖱️", function(v)
     settings.ctrlClickTpEnabled = v
 end)
 table.insert(riskyToggles, tCtrl)
-createToggle(m3, "Anti-Void (no caer al vacío)", function(v) settings.antiVoid = v end)
+createToggle(m3, "Anti-Void", function(v) settings.antiVoid = v end)
 createSlider(m3, "Gravedad", 196, 0, 400, function(v)
     if settings.ghostMode then pcall(function() workspace.Gravity = 196.2 end) ghostBlock() return end
     settings.gravity = v pcall(function() workspace.Gravity = v end)
+end)
+local tTap
+tTap = createToggle(m3, "Tap TP táctil", function(v)
+    if v and ghostBlock() then tTap.Set(false) return end
+    settings.tapTp = v
+end)
+table.insert(riskyToggles, tTap)
+UserInputService.TouchTapInWorld:Connect(function(pos, processed)
+    if processed then return end
+    if not settings.tapTp or settings.ghostMode then return end
+    local r = myRoot()
+    if r then r.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0)) r.Velocity = Vector3.zero end
+end)
+local freecamPrev = nil
+local function restoreFreecam()
+    if freecamPrev ~= nil then
+        pcall(function()
+            camera.CameraSubject = freecamPrev[1]
+            camera.CameraType = freecamPrev[2]
+        end)
+        freecamPrev = nil
+    end
+end
+createToggle(m3, "Freecam", function(v)
+    settings.freecam = v
+    if not v then restoreFreecam() end
+end)
+RunService.RenderStepped:Connect(function(dt)
+    if not settings.freecam then return end
+    if camera.CameraType ~= Enum.CameraType.Scriptable then
+        if freecamPrev == nil then freecamPrev = {camera.CameraSubject, camera.CameraType} end
+        camera.CameraType = Enum.CameraType.Scriptable
+    end
+    local cf = camera.CFrame
+    local mv = Vector3.zero
+    local h = myHum()
+    if h and h.MoveDirection.Magnitude > 0.1 then
+        local md = h.MoveDirection
+        mv = mv + (cf.LookVector * -md.Z) + (cf.RightVector * md.X)
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) then mv = mv + cf.LookVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) then mv = mv - cf.LookVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) then mv = mv - cf.RightVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) then mv = mv + cf.RightVector end
+    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0, 1, 0) end
+    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then mv = mv - Vector3.new(0, 1, 0) end
+    if mv.Magnitude > 1 then mv = mv.Unit end
+    camera.CFrame = cf + (mv * 60 * dt)
 end)
 
 -- TELEPORT
@@ -790,6 +849,26 @@ tpFastBtn.MouseButton1Click:Connect(function()
     if not (tp and mr and tr) then notify("TP", "Selecciona un jugador primero.") return end
     mr.CFrame = tr.CFrame + Vector3.new(0, 3, 0) mr.Velocity = Vector3.zero
 end)
+local tFollow
+tFollow = createToggle(t1, "Seguir seleccionado", function(v)
+    if v and ghostBlock() then tFollow.Set(false) return end
+    settings.tpFollow = v
+    if v and not settings.selectedTpPlayer then notify("TP", "Selecciona un jugador primero.") end
+end)
+table.insert(riskyToggles, tFollow)
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if settings.tpFollow and not settings.ghostMode then
+            local tp, mr = settings.selectedTpPlayer, myRoot()
+            local tr = targetRootOf(tp)
+            if tp and mr and tr then
+                mr.CFrame = tr.CFrame + Vector3.new(0, 3, 0)
+                mr.Velocity = Vector3.zero
+            end
+        end
+    end
+end)
 
 local t2 = createCard(pages["teleport"], "📌 Posiciones", 150)
 createButton(t2, "💾 Guardar mi posición", function()
@@ -807,7 +886,7 @@ end, false)
 -- TROLL
 local tr1 = createCard(pages["troll"], "🤡 Seguir & Orbitar", 230)
 local tTrack
-tTrack = createToggle(tr1, "Tracker (pegado a su cara)", function(v)
+tTrack = createToggle(tr1, "Tracker", function(v)
     if v and ghostBlock() then tTrack.Set(false) return end
     settings.trollTrackEnabled = v
     if v then settings.trollOrbitEnabled = false settings.flingEnabled = false settings.headSitEnabled = false end
@@ -815,7 +894,7 @@ end)
 table.insert(riskyToggles, tTrack)
 createSlider(tr1, "Distancia tracker", settings.trackDist, 1, 10, function(v) settings.trackDist = v end)
 local tOrbit
-tOrbit = createToggle(tr1, "Órbita (girar alrededor)", function(v)
+tOrbit = createToggle(tr1, "Órbita", function(v)
     if v and ghostBlock() then tOrbit.Set(false) return end
     settings.trollOrbitEnabled = v
     if v then settings.trollTrackEnabled = false settings.flingEnabled = false settings.headSitEnabled = false end
@@ -826,7 +905,7 @@ createSlider(tr1, "Radio órbita", settings.orbitRadius, 3, 20, function(v) sett
 
 local tr2 = createCard(pages["troll"], "😈 Molestar", 190)
 local tFling
-tFling = createToggle(tr2, "Fling (lanzar al seleccionado)", function(v)
+tFling = createToggle(tr2, "Fling", function(v)
     if v and ghostBlock() then tFling.Set(false) return end
     settings.flingEnabled = v
     if v then settings.trollTrackEnabled = false settings.trollOrbitEnabled = false end
@@ -839,11 +918,11 @@ tHeadSit = createToggle(tr2, "Sentarse en su cabeza 🪑", function(v)
     if v then settings.trollTrackEnabled = false settings.trollOrbitEnabled = false end
 end)
 table.insert(riskyToggles, tHeadSit)
-createToggle(tr2, "Espectar seleccionado 📺", function(v)
+createToggle(tr2, "Espectar", function(v)
     settings.spectateEnabled = v spectating = v
     if not v then pcall(function() camera.CameraSubject = myHum() end) end
 end)
-createButton(tr2, "👁️ Ver (spectate rápido)", function()
+createButton(tr2, "👁️ Ver", function()
     local tp = settings.selectedTpPlayer
     if tp and tp.Character then
         local h = tp.Character:FindFirstChildOfClass("Humanoid")
@@ -860,15 +939,15 @@ tAmmo = createToggle(w1, "Munición infinita ♾️", function(v)
 end)
 table.insert(riskyToggles, tAmmo)
 local tRapid
-tRapid = createToggle(w1, "Rapid Fire (recarga rápida)", function(v)
+tRapid = createToggle(w1, "Rapid Fire", function(v)
     if v and ghostBlock() then tRapid.Set(false) return end
     settings.rapidFire = v
 end)
 table.insert(riskyToggles, tRapid)
-createButton(w1, "🧹 Limpiar retroceso visual (reset cámara)", function()
+createButton(w1, "🧹 Reset cámara", function()
     camera.FieldOfView = 70 notify("Weapon", "Cámara reseteada.")
 end, false)
-createButton(w1, "🔍 Ver arma del seleccionado (consola F9)", function()
+createButton(w1, "🔍 Ver arma · F9", function()
     local tp = settings.selectedTpPlayer
     if tp and tp.Character then
         for _, t in ipairs(tp.Character:GetChildren()) do
@@ -880,7 +959,7 @@ end, false)
 
 -- WORLD
 local wo1 = createCard(pages["world"], "🌍 Iluminación & Mapa", 190)
-createToggle(wo1, "Fullbright (ver en la oscuridad) 💡", function(v) settings.fullbright = v end)
+createToggle(wo1, "Fullbright 💡", function(v) settings.fullbright = v end)
 createButton(wo1, "☀️ Poner de día", function()
     Lighting.ClockTime = 14 Lighting.FogEnd = 100000 Lighting.Brightness = 2 Lighting.Ambient = Color3.fromRGB(255,255,255)
 end, false)
@@ -890,10 +969,16 @@ end, false)
 createButton(wo1, "🌫️ Quitar niebla", function()
     Lighting.FogEnd = 100000 for _, v in ipairs(Lighting:GetChildren()) do if v:IsA("Atmosphere") then v.Density = 0 end end
 end, false)
+createSlider(wo1, "Hora del día", 14, 0, 24, function(v) Lighting.ClockTime = v end)
 
 local wo2 = createCard(pages["world"], "⚡ Rendimiento", 150)
-createToggle(wo2, "Anti-AFK (no te expulsa) ☕", function(v) settings.antiAfk = v end)
-createButton(wo2, "🚀 FPS BOOST (quitar lag)", function()
+createToggle(wo2, "Anti-AFK ☕", function(v) settings.antiAfk = v end)
+createToggle(wo2, "Sin sombras", function(v)
+    settings.noShadows = v
+    if v then Lighting.GlobalShadows = false
+    else Lighting.GlobalShadows = (origLighting.GlobalShadows == nil) and true or origLighting.GlobalShadows end
+end)
+createButton(wo2, "🚀 FPS BOOST", function()
     if settings.fpsBoosted then notify("World", "Ya está aplicado.") return end
     settings.fpsBoosted = true
     Lighting.GlobalShadows = false Lighting.FogEnd = 9e9
@@ -918,12 +1003,13 @@ local function applyGhostOff()
     settings.trollOrbitEnabled = false settings.flingEnabled = false settings.headSitEnabled = false
     settings.ammoEnabled = false settings.rapidFire = false
     settings.magicBulletsEnabled = false
+    settings.triggerbot = false settings.tapTp = false settings.tpFollow = false
     restoreDefaults()
     pcall(function() workspace.Gravity = 196.2 end)
 end
-local cfGhost = createCard(pages["config"], "👻 Modo Fantasma (anti-ban)", 90)
+local cfGhost = createCard(pages["config"], "👻 Modo Fantasma", 90)
 local tGhost
-tGhost = createToggle(cfGhost, "MODO FANTASMA (solo ESP + aim camara)", function(v)
+tGhost = createToggle(cfGhost, "MODO FANTASMA", function(v)
     settings.ghostMode = v
     if v then applyGhostOff() notify("Fantasma", "Solo queda lo invisible al servidor: ESP + aimbot camara + luz.") end
 end)
@@ -947,12 +1033,12 @@ createButton(cf1, "🔄 Resetear todo", function()
     applyGhostOff()
     for _, s in pairs(toggleStates) do pcall(function() s.Set(false) end) end
     restoreDefaults() workspace.Gravity = 196.2 restoreLighting()
-    pcall(restoreCamType)
+    pcall(restoreCamType) pcall(restoreFreecam)
     pcall(function() camera.CameraSubject = myHum() camera.FieldOfView = 70 end)
     notify("Config", "Todo reseteado y huellas limpiadas.")
 end, false)
 
-local cf2 = createCard(pages["config"], "⌨️ Keybinds (F1-F6 + UI)", 330)
+local cf2 = createCard(pages["config"], "⌨️ Keybinds", 330)
 local function keyRow(parent, labelName, bindKey)
     local row = Instance.new("Frame") row.Size = UDim2.new(1, 0, 0, 30) row.BackgroundTransparency = 1 row.Parent = parent
     local lbl = Instance.new("TextLabel")
@@ -980,7 +1066,7 @@ createDropdown(cf2, "Tecla abrir/cerrar UI", {"RightShift", "Insert", "P", "L"},
 end)
 
 local cf3 = createCard(pages["config"], "👤 Cuenta & Salir", 150)
-createButton(cf3, "🔁 Rejoin (reentrar)", function()
+createButton(cf3, "🔁 Rejoin", function()
     local ok = pcall(function()
         game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
     end)
@@ -989,11 +1075,25 @@ createButton(cf3, "🔁 Rejoin (reentrar)", function()
         notify("Rejoin", "Reintentando con teleport normal...")
     end
 end, false)
-createButton(cf3, "🗑️ Destruir Zvolt (pánico: restaura todo)", function()
+createButton(cf3, "🎲 Server Hop", function()
+    pcall(function() game:GetService("TeleportService"):Teleport(game.PlaceId, localPlayer) end)
+    notify("Cuenta", "Buscando otro servidor...")
+end, false)
+createButton(cf3, "📋 Copiar JobId", function()
+    local j = tostring(game.JobId)
+    if setclipboard then
+        setclipboard(j)
+        notify("Cuenta", "JobId copiado al portapapeles.")
+    else
+        notify("Cuenta", "JobId: " .. j)
+    end
+    print("JOBID:", j)
+end, false)
+createButton(cf3, "🗑️ Destruir Zvolt", function()
     restoreDefaults() restoreLighting()
     pcall(function() workspace.Gravity = 196.2 end)
     pcall(function() RunService:UnbindFromRenderStep("ZV_Aimbot") end)
-    pcall(restoreCamType)
+    pcall(restoreCamType) pcall(restoreFreecam)
     pcall(function() camera.CameraSubject = myHum() camera.FieldOfView = 70 end) gui:Destroy()
 end, false)
 
@@ -1037,6 +1137,28 @@ aimBtn.BackgroundColor3 = COLOR_CARD aimBtn.Font = FONT_BOLD aimBtn.TextSize = 1
 aimBtn.TextColor3 = Accent() aimBtn.Text = "AIM" aimBtn.Visible = false aimBtn.Parent = gui
 corner(aimBtn, 999) stroke(aimBtn, Accent(), 2) TagAccent(aimBtn:FindFirstChildOfClass("UIStroke"), "Color")
 local aimingMobile = false
+-- Botones táctiles para subir/bajar volando
+local flyUpHeld, flyDownHeld = false, false
+local function flyTouchBtn(txt, pos)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(0, 56, 0, 56) b.Position = pos
+    b.BackgroundColor3 = COLOR_CARD b.Font = FONT_BOLD b.TextSize = 18
+    b.TextColor3 = Accent() b.Text = txt b.Visible = false b.Parent = gui
+    corner(b, 999) stroke(b, Accent(), 2)
+    b.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then
+            if txt == "▲" then flyUpHeld = true else flyDownHeld = true end
+            b.BackgroundColor3 = Accent() b.TextColor3 = Color3.fromRGB(0, 0, 0)
+        end
+    end)
+    b.InputEnded:Connect(function(i)
+        flyUpHeld = false flyDownHeld = false
+        b.BackgroundColor3 = COLOR_CARD b.TextColor3 = Accent()
+    end)
+    return b
+end
+local flyUpBtn = flyTouchBtn("▲", UDim2.new(1, -164, 0.5, -70))
+local flyDownBtn = flyTouchBtn("▼", UDim2.new(1, -164, 0.5, 0))
 aimBtn.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then aimingMobile = true aimBtn.BackgroundColor3 = Accent() aimBtn.TextColor3 = Color3.fromRGB(0,0,0) end end)
 aimBtn.InputEnded:Connect(function(i) aimingMobile = false aimBtn.BackgroundColor3 = COLOR_CARD aimBtn.TextColor3 = Accent() end)
 
@@ -1109,7 +1231,7 @@ local function buildESP(plr, char)
         local hl = Instance.new("Highlight")
         hl.Adornee = char hl.FillTransparency = 0.7 hl.OutlineTransparency = 0
         hl.FillColor = espColor() hl.OutlineColor = espColor()
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- X-ray: se ve a través de paredes
+        hl.DepthMode = (settings.espXray ~= false) and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
         hl.Parent = char objs.hl = hl
     end
     local bb = Instance.new("BillboardGui")
@@ -1151,8 +1273,15 @@ local function updateESP(plr)
         return
     end
     local col = espColor()
+    -- con Team Check: aliados en verde, enemigos con el color del tema
+    if settings.teamCheck and sameTeam(plr, localPlayer) then
+        col = Color3.fromRGB(90, 255, 130)
+    end
     objs.bb.Enabled = true
-    if objs.hl then objs.hl.Enabled = true end
+    if objs.hl then
+        objs.hl.Enabled = true
+        objs.hl.DepthMode = (settings.espXray ~= false) and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+    end
     -- nombre + dist
     local txt = ""
     if settings.espNames then txt = plr.DisplayName .. " " end
@@ -1565,6 +1694,8 @@ RunService.RenderStepped:Connect(function(dt)
     local wantFov = (settings.aimEnabled or settings.silentAimEnabled) and settings.showFov
     fovFrame.Visible = wantFov
     aimBtn.Visible = settings.aimEnabled and isTouch
+    flyUpBtn.Visible = settings.flyEnabled and isTouch
+    flyDownBtn.Visible = settings.flyEnabled and isTouch
     if silentFlash > 0 then silentFlash = math.max(0, silentFlash - dt) end
     if wantFov then
         -- cada aim usa su propio radio: el círculo muestra el del aimbot, o el del silent si solo ese está activo
@@ -1801,6 +1932,8 @@ RunService.Heartbeat:Connect(function(dt)
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then mv = mv + cf.RightVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0, 1, 0) end
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then mv = mv - Vector3.new(0, 1, 0) end
+        if flyUpHeld then mv = mv + Vector3.new(0, 1, 0) end
+        if flyDownHeld then mv = mv - Vector3.new(0, 1, 0) end
         if mv.Magnitude > 1 then mv = mv.Unit end
         r.CFrame = r.CFrame + (mv * settings.flySpeed * dt)
         r.Velocity = Vector3.zero r.AssemblyLinearVelocity = Vector3.zero r.RotVelocity = Vector3.zero
@@ -1868,9 +2001,57 @@ task.spawn(function()
     end
 end)
 
+-- Triggerbot: dispara solo cuando un enemigo está bajo la mira (usa el FOV del aimbot).
+task.spawn(function()
+    local lastShot = 0
+    while true do
+        task.wait(0.05)
+        if settings.triggerbot and not settings.ghostMode then
+            local now = tick()
+            if now - lastShot > 0.3 then
+                local ref = aimRefPoint()
+                local found = false
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if found then break end
+                    if p ~= localPlayer and isAlive(p) and not sameTeam(p, localPlayer) then
+                        local part = p.Character and getAimPart(p.Character, settings.targetPart)
+                        if part then
+                            local sp, on = camera:WorldToViewportPoint(part.Position)
+                            if on and (Vector2.new(sp.X, sp.Y) - ref).Magnitude <= math.max(14, settings.fovRadius * 0.3) then
+                                found = true
+                            end
+                        end
+                    end
+                end
+                if found then
+                    lastShot = now
+                    task.wait((settings.triggerDelay or 150) / 1000)
+                    local ok = pcall(function()
+                        if mouse1click then
+                            mouse1click()
+                        elseif mouse1press then
+                            mouse1press()
+                            task.wait(0.05)
+                            if mouse1release then mouse1release() end
+                        else
+                            local vim = game:GetService("VirtualInputManager")
+                            vim:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                            task.wait(0.05)
+                            vim:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                        end
+                    end)
+                    if not ok and not settings.triggerWarned then
+                        settings.triggerWarned = true
+                        notify("Triggerbot", "Tu executor no soporta clicks.")
+                    end
+                end
+            end
+        end
+    end
+end)
+
 -- respawn: limpiar estados
-localPlayer.CharacterAdded:Connect(function()
-    task.wait(0.5)
+localPlayer.CharacterAdded:Connect(function()    task.wait(0.5)
     table.clear(hitboxOriginals) currentAimTarget = nil orbitAngle = 0
     for p, _ in pairs(espData) do clearESP(p) end
     refreshPlayers()
@@ -1894,5 +2075,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.24 FEEL", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.24 FEEL] cargado OK - zona muerta, sin pelea con el mouse")
+notify("ZVOLT V2.25 FULL", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.25 FULL] cargado OK - menu limpio + mas utilidades")
