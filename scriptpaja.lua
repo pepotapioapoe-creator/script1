@@ -28,6 +28,7 @@ local settings = {
     spyEnabled = false,
     aimDebug = false,
     aimAuto = false,
+    aimClassic = false,
     -- visuals
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
     espBox = true, espTracer = false, tracerOrigin = "Bottom", espChams = true, espTool = false,
@@ -236,7 +237,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.13 AUTO" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.14 CLASSIC" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -279,7 +280,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.13 AUTO" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.14 CLASSIC" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -610,6 +611,7 @@ createToggle(c1, "Wall Check (no apuntar tras pared)", function(v) settings.wall
 createToggle(c1, "Sticky Target (fijar objetivo)", function(v) settings.stickyTarget = v end)
 createToggle(c1, "Aimbot DEBUG (diagnóstico en F9)", function(v) settings.aimDebug = v end)
 createToggle(c1, "Modo AUTO (apunta solo, sin clic)", function(v) settings.aimAuto = v end)
+createToggle(c1, "Modo CLÁSICO V1 (si el nuevo falla)", function(v) settings.aimClassic = v currentAimTarget = nil end)
 
 local c2 = createCard(pages["combat"], "⭕ FOV & Suavizado", 190)
 createSlider(c2, "Radio FOV", settings.fovRadius, 40, 400, function(v) settings.fovRadius = v end)
@@ -1575,6 +1577,7 @@ local hasMouseMove = (mousemoverel ~= nil)
 local useBoundAim = false
 local function runAimbot()
     if not camera then return end
+    if settings.aimClassic then return end -- el clásico corre en su propio loop abajo
     local aiming = settings.aimEnabled and (settings.aimAuto or aimingPC or aimingMobile)
     snapLine.Visible = false
     if not aiming then
@@ -1621,8 +1624,43 @@ end
 -- Segunda aplicación en Heartbeat: cubre juegos que mueven la cámara en Stepped/Heartbeat.
 -- (Dos escrituras por frame: la última antes del render siempre es la nuestra.)
 RunService.Heartbeat:Connect(function()
-    if useBoundAim and settings.aimEnabled and (settings.aimAuto or aimingPC or aimingMobile) then
+    if useBoundAim and not settings.aimClassic and settings.aimEnabled and (settings.aimAuto or aimingPC or aimingMobile) then
         runAimbot()
+    end
+end)
+-- MODO CLÁSICO: la fórmula exacta del V1 que sí funciona (RenderStepped plano,
+-- sin team/wall/sticky checks, lerp directo). Si el nuevo pipeline falla en un juego, este anda.
+RunService.RenderStepped:Connect(function()
+    if not (settings.aimEnabled and settings.aimClassic) then return end
+    if not (aimingPC or aimingMobile or settings.aimAuto) then return end
+    if not camera or not localPlayer.Character then return end
+    local ml = UserInputService:GetMouseLocation()
+    local lr = myRoot()
+    local bestPart, bestD = nil, settings.fovRadius
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character and localPlayer.Character then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            local tp = player.Character:FindFirstChild(settings.targetPart) or player.Character:FindFirstChild("Head")
+            if humanoid and humanoid.Health > 0 and tp and lr then
+                if (lr.Position - tp.Position).Magnitude <= settings.maxDistance then
+                    local sp, on = camera:WorldToViewportPoint(tp.Position)
+                    if on then
+                        local d = (Vector2.new(sp.X, sp.Y) - ml).Magnitude
+                        if d <= settings.fovRadius and d < bestD then
+                            bestD = d
+                            bestPart = tp
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if bestPart then
+        pcall(function()
+            camera.CFrame = camera.CFrame:Lerp(
+                CFrame.new(camera.CFrame.Position, bestPart.Position),
+                math.clamp(settings.smoothing / 100, 0.05, 1))
+        end)
     end
 end)
 
@@ -1849,5 +1887,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.13 AUTO", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.13 AUTO] cargado OK - modo auto sin clic")
+notify("ZVOLT V2.14 CLASSIC", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.14 CLASSIC] cargado OK - modo clasico V1 en Combat")
