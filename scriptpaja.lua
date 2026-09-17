@@ -31,6 +31,7 @@ local settings = {
     aimClassic = false,
     aimSnap = false,
     aimNpcs = false,
+    aimBrute = false,
     -- visuals
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
     espBox = true, espTracer = false, tracerOrigin = "Bottom", espChams = true, espTool = false,
@@ -245,7 +246,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.20 DEEP" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.21 BRUTE" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -288,7 +289,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.20 DEEP" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.21 BRUTE" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -619,6 +620,7 @@ createToggle(c1, "Modo AUTO (apunta solo, sin clic)", function(v) settings.aimAu
 createToggle(c1, "SNAP directo (sin suavizado)", function(v) settings.aimSnap = v end)
 createToggle(c1, "Incluir NPCs/bots", function(v) settings.aimNpcs = v end)
 createToggle(c1, "Diagnóstico profundo (F9)", function(v) settings.aimDebug = v end)
+createToggle(c1, "Fuerza bruta (sin humanoid/vida)", function(v) settings.aimBrute = v end)
 
 local c2 = createCard(pages["combat"], "⭕ FOV & Suavizado", 190)
 createSlider(c2, "Radio FOV", settings.fovRadius, 40, 400, function(v) settings.fovRadius = v end)
@@ -1551,8 +1553,11 @@ RunService.RenderStepped:Connect(function(dt)
             local cAlive, cPart, cScreen, cBots = 0, 0, 0, 0
             local function consider(model, label)
                 if not model then return end
-                local humanoid = model:FindFirstChildOfClass("Humanoid")
-                if not (humanoid and humanoid.Health > 0) then return end
+                -- BloxStrike y otros no usan Humanoid (vida custom): en bruto se apunta igual
+                if not settings.aimBrute then
+                    local humanoid = model:FindFirstChildOfClass("Humanoid")
+                    if not (humanoid and humanoid.Health > 0) then return end
+                end
                 cAlive = cAlive + 1
                 local tp = getAimPart(model, settings.targetPart)
                 if not (tp and lr2) then return end
@@ -1574,7 +1579,7 @@ RunService.RenderStepped:Connect(function(dt)
                         consider(player.Character, player.DisplayName)
                     end
                 end
-                if not bestPartV1 and settings.aimNpcs then
+                if settings.aimBrute or (not bestPartV1 and settings.aimNpcs) then
                     -- bots: modelos con humanoide que no son jugadores (top-level y dentro de carpetas)
                     local function scanBots(c)
                         for _, m in ipairs(c:GetChildren()) do
@@ -1837,5 +1842,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.20 DEEP", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.20 DEEP] cargado OK - diagnostico profundo F9")
+notify("ZVOLT V2.21 BRUTE", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.21 BRUTE] cargado OK - fuerza bruta sin humanoid")
