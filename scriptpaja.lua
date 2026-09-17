@@ -39,10 +39,29 @@ local settings = {
     ammoEnabled = false, rapidFire = false, fullbright = false, fpsBoosted = false, antiAfk = false,
     -- ui
     uiToggleKey = Enum.KeyCode.RightShift, theme = "Cyan", uiTransparency = 0,
+    ghostMode = false,
 }
 local DEFAULT_SPEED, DEFAULT_JUMP = 16, 50
 local hitboxOriginals, currentAimTarget = {}, nil
 local orbitAngle, spectating = 0, false
+
+--// Snapshot original para restaurar todo al salir (anti-ban: no dejar huellas)
+local origLighting = {}
+pcall(function()
+    origLighting = {
+        ClockTime = Lighting.ClockTime, Brightness = Lighting.Brightness,
+        FogEnd = Lighting.FogEnd, Ambient = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient, GlobalShadows = Lighting.GlobalShadows,
+    }
+end)
+local function restoreLighting()
+    pcall(function()
+        for k, v in pairs(origLighting) do Lighting[k] = v end
+        for _, v in ipairs(Lighting:GetChildren()) do
+            if v:IsA("Atmosphere") and origLighting.AtmosDensity ~= nil then v.Density = origLighting.AtmosDensity end
+        end
+    end)
+end
 
 local keybinds = {
     aimbot = Enum.KeyCode.F1, esp = Enum.KeyCode.F2, noclip = Enum.KeyCode.F3,
@@ -130,11 +149,8 @@ local gui = Instance.new("ScreenGui")
 gui.Name = "ZvoltV2_" .. math.random(11111, 99999)
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
-pcall(function()
-    local hui = (gethui and gethui()) or game:GetService("CoreGui")
-    gui.Parent = hui
-end)
-if not gui.Parent then gui.Parent = localPlayer:WaitForChild("PlayerGui") end
+-- STEALTH: siempre PlayerGui. gethui/CoreGui es una bandera clásica para los anticheats.
+gui.Parent = localPlayer:WaitForChild("PlayerGui")
 
 --// Notificaciones modernas (stack)
 local notifHolder = Instance.new("Frame")
@@ -206,7 +222,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.2 SILENT" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.4 GHOST" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -249,7 +265,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.2 SILENT" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.4 GHOST" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -531,14 +547,28 @@ local function createDropdown(parent, title, list, default, callback)
     return b
 end
 
+--// MODO FANTASMA: solo permite lo que el servidor NO puede ver (ESP, aimbot de cámara, luz).
+-- Los anticheats detectan: WalkSpeed, tamaño de hitbox, teleports, hooks, fly, noclip.
+local riskyToggles = {}
+local function ghostBlock()
+    if settings.ghostMode then
+        notify("Modo Fantasma", "Desactivalo para usar funciones riesgosas.")
+        return true
+    end
+    return false
+end
+
 --// ===== CONSTRUIR PESTAÑAS =====
 -- COMBAT (Silent primero para que se vea sin hacer scroll)
 local c4 = createCard(pages["combat"], "👻 Silent Aim (tiros fantasma)", 200)
-createToggle(c4, "Silent Aim (redirige tiros sin apuntar)", function(v)
+local tSilent
+tSilent = createToggle(c4, "Silent Aim ⚠️ hook detectable", function(v)
+    if v and ghostBlock() then tSilent.Set(false) return end
     settings.silentAimEnabled = v
     if v then tryEnableSilentAim() end
     notify("Silent Aim", v and "Activado (usa el mismo FOV)" or "Desactivado")
 end, "silent")
+table.insert(riskyToggles, tSilent)
 createSlider(c4, "Hit Chance %", settings.silentHitChance, 1, 100, function(v) settings.silentHitChance = v end)
 createSlider(c4, "Prediccion", 12, 0, 50, function(v) settings.silentPrediction = v / 100 end)
 createDropdown(c4, "Hueso silent", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "Same as Aimbot"}, "Same as Aimbot", function(v)
@@ -560,9 +590,19 @@ createToggle(c2, "Mostrar círculo FOV", function(v) settings.showFov = v end, n
 createToggle(c2, "FOV arcoíris 🌈", function(v) settings.fovRainbow = v end)
 
 local c3 = createCard(pages["combat"], "💥 Daño & Paredes", 150)
-createToggle(c3, "Hitbox Extender", function(v) settings.hitboxEnabled = v if not v then restoreDefaults() end end, "hitbox")
+local tHitbox
+tHitbox = createToggle(c3, "Hitbox Extender ⚠️ MUY detectable", function(v)
+    if v and ghostBlock() then tHitbox.Set(false) return end
+    settings.hitboxEnabled = v if not v then restoreDefaults() end
+end, "hitbox")
+table.insert(riskyToggles, tHitbox)
 createSlider(c3, "Tamaño Hitbox", settings.hitboxSize, 2, 25, function(v) settings.hitboxSize = v end)
-createToggle(c3, "Wallbang (golpear a través de pared)", function(v) settings.wallbangEnabled = v end)
+local tWallbang
+tWallbang = createToggle(c3, "Wallbang ⚠️ detectable", function(v)
+    if v and ghostBlock() then tWallbang.Set(false) return end
+    settings.wallbangEnabled = v
+end)
+table.insert(riskyToggles, tWallbang)
 
 -- VISUALS
 local v1 = createCard(pages["visuals"], "👁️ ESP Principal", 280)
@@ -582,24 +622,67 @@ createSlider(v2, "Distancia máxima", settings.maxDistance, 100, 5000, function(
 
 -- MOVEMENT
 local m1 = createCard(pages["movement"], "✈️ Vuelo & Noclip", 150)
-createToggle(m1, "Fly (WASD + Espacio/Shift, funciona en móvil con joystick)", function(v) settings.flyEnabled = v end, "fly")
+local tFly
+tFly = createToggle(m1, "Fly ⚠️ detectable (WASD + Espacio/Shift, joystick en móvil)", function(v)
+    if v and ghostBlock() then tFly.Set(false) return end
+    settings.flyEnabled = v
+end, "fly")
+table.insert(riskyToggles, tFly)
 createSlider(m1, "Velocidad de vuelo", settings.flySpeed, 10, 200, function(v) settings.flySpeed = v end)
-createToggle(m1, "Noclip (atravesar todo)", function(v) settings.noclipEnabled = v end, "noclip")
+local tNoclip
+tNoclip = createToggle(m1, "Noclip (atravesar todo)", function(v)
+    if v and ghostBlock() then tNoclip.Set(false) return end
+    settings.noclipEnabled = v
+end, "noclip")
+table.insert(riskyToggles, tNoclip)
 
 local m2 = createCard(pages["movement"], "🏃 Velocidad & Salto", 240)
-createToggle(m2, "Custom Speed", function(v) settings.speedEnabled = v if not v then local h = myHum() if h then h.WalkSpeed = DEFAULT_SPEED end end end, "speed")
+local tSpeed
+tSpeed = createToggle(m2, "Custom Speed ⚠️ detectable", function(v)
+    if v and ghostBlock() then tSpeed.Set(false) return end
+    settings.speedEnabled = v if not v then local h = myHum() if h then h.WalkSpeed = DEFAULT_SPEED end end
+end, "speed")
+table.insert(riskyToggles, tSpeed)
 createSlider(m2, "WalkSpeed", settings.customSpeed, 16, 150, function(v) settings.customSpeed = v end)
-createToggle(m2, "Super Jump", function(v) settings.jumpEnabled = v if not v then local h = myHum() if h then h.JumpPower = DEFAULT_JUMP end end end, "jump")
+local tJump
+tJump = createToggle(m2, "Super Jump", function(v)
+    if v and ghostBlock() then tJump.Set(false) return end
+    settings.jumpEnabled = v if not v then local h = myHum() if h then h.JumpPower = DEFAULT_JUMP end end
+end, "jump")
+table.insert(riskyToggles, tJump)
 createSlider(m2, "JumpPower", settings.customJump, 50, 350, function(v) settings.customJump = v end)
-createToggle(m2, "Bunny Hop (auto-salto)", function(v) settings.bhopEnabled = v end)
-createToggle(m2, "Salto infinito ♾️", function(v) settings.infJumpEnabled = v end)
+local tBhop
+tBhop = createToggle(m2, "Bunny Hop (auto-salto)", function(v)
+    if v and ghostBlock() then tBhop.Set(false) return end
+    settings.bhopEnabled = v
+end)
+table.insert(riskyToggles, tBhop)
+local tInfJump
+tInfJump = createToggle(m2, "Salto infinito ♾️", function(v)
+    if v and ghostBlock() then tInfJump.Set(false) return end
+    settings.infJumpEnabled = v
+end)
+table.insert(riskyToggles, tInfJump)
 
 local m3 = createCard(pages["movement"], "🌀 Extra", 190)
-createToggle(m3, "Spinbot", function(v) settings.spinEnabled = v end, "spinbot")
+local tSpin
+tSpin = createToggle(m3, "Spinbot ⚠️ detectable", function(v)
+    if v and ghostBlock() then tSpin.Set(false) return end
+    settings.spinEnabled = v
+end, "spinbot")
+table.insert(riskyToggles, tSpin)
 createSlider(m3, "Velocidad spin", settings.spinSpeed, 5, 200, function(v) settings.spinSpeed = v end)
-createToggle(m3, "Ctrl + Click TP 🖱️", function(v) settings.ctrlClickTpEnabled = v end)
+local tCtrl
+tCtrl = createToggle(m3, "Ctrl + Click TP 🖱️", function(v)
+    if v and ghostBlock() then tCtrl.Set(false) return end
+    settings.ctrlClickTpEnabled = v
+end)
+table.insert(riskyToggles, tCtrl)
 createToggle(m3, "Anti-Void (no caer al vacío)", function(v) settings.antiVoid = v end)
-createSlider(m3, "Gravedad", 196, 0, 400, function(v) settings.gravity = v pcall(function() workspace.Gravity = v end) end)
+createSlider(m3, "Gravedad", 196, 0, 400, function(v)
+    if settings.ghostMode then pcall(function() workspace.Gravity = 196.2 end) ghostBlock() return end
+    settings.gravity = v pcall(function() workspace.Gravity = v end)
+end)
 
 -- TELEPORT
 local t1 = createCard(pages["teleport"], "📍 Teleport a jugadores", 380)
@@ -647,6 +730,7 @@ tpFastBtn.Size = UDim2.new(0.48, 0, 1, 0) tpFastBtn.Position = UDim2.new(0.52, 0
 tpFastBtn.BackgroundColor3 = COLOR_CARD2 tpFastBtn.Font = FONT_BOLD tpFastBtn.TextSize = 11
 tpFastBtn.TextColor3 = COLOR_TEXT tpFastBtn.Text = "⚡ TP INSTANT" tpFastBtn.Parent = btnRow corner(tpFastBtn, 8)
 tpTweenBtn.MouseButton1Click:Connect(function()
+    if ghostBlock() then return end
     local tp = settings.selectedTpPlayer local mr, tr = myRoot(), targetRootOf(tp)
     if not (tp and mr and tr) then notify("TP", "Selecciona un jugador primero.") return end
     local start = mr.CFrame local fin = tr.CFrame + Vector3.new(0, 3, 0)
@@ -658,6 +742,7 @@ tpTweenBtn.MouseButton1Click:Connect(function()
     end
 end)
 tpFastBtn.MouseButton1Click:Connect(function()
+    if ghostBlock() then return end
     local tp = settings.selectedTpPlayer local mr, tr = myRoot(), targetRootOf(tp)
     if not (tp and mr and tr) then notify("TP", "Selecciona un jugador primero.") return end
     mr.CFrame = tr.CFrame + Vector3.new(0, 3, 0) mr.Velocity = Vector3.zero
@@ -668,35 +753,49 @@ createButton(t2, "💾 Guardar mi posición", function()
     local r = myRoot() if r then settings.savedPos = r.CFrame notify("TP", "Posición guardada.") end
 end, false)
 createButton(t2, "↩️ Volver a posición guardada", function()
+    if ghostBlock() then return end
     local r = myRoot() if r and settings.savedPos then r.CFrame = settings.savedPos r.Velocity = Vector3.zero end
 end, false)
 createButton(t2, "🏠 Ir al spawn", function()
+    if ghostBlock() then return end
     local r = myRoot() if r then r.CFrame = CFrame.new(0, 10, 0) r.Velocity = Vector3.zero end
 end, false)
 
 -- TROLL
 local tr1 = createCard(pages["troll"], "🤡 Seguir & Orbitar", 230)
-createToggle(tr1, "Tracker (pegado a su cara)", function(v)
+local tTrack
+tTrack = createToggle(tr1, "Tracker (pegado a su cara)", function(v)
+    if v and ghostBlock() then tTrack.Set(false) return end
     settings.trollTrackEnabled = v
     if v then settings.trollOrbitEnabled = false settings.flingEnabled = false settings.headSitEnabled = false end
 end)
+table.insert(riskyToggles, tTrack)
 createSlider(tr1, "Distancia tracker", settings.trackDist, 1, 10, function(v) settings.trackDist = v end)
-createToggle(tr1, "Órbita (girar alrededor)", function(v)
+local tOrbit
+tOrbit = createToggle(tr1, "Órbita (girar alrededor)", function(v)
+    if v and ghostBlock() then tOrbit.Set(false) return end
     settings.trollOrbitEnabled = v
     if v then settings.trollTrackEnabled = false settings.flingEnabled = false settings.headSitEnabled = false end
 end)
+table.insert(riskyToggles, tOrbit)
 createSlider(tr1, "Velocidad órbita", settings.orbitSpeed, 1, 15, function(v) settings.orbitSpeed = v end)
 createSlider(tr1, "Radio órbita", settings.orbitRadius, 3, 20, function(v) settings.orbitRadius = v end)
 
 local tr2 = createCard(pages["troll"], "😈 Molestar", 190)
-createToggle(tr2, "Fling (lanzar al seleccionado)", function(v)
+local tFling
+tFling = createToggle(tr2, "Fling (lanzar al seleccionado)", function(v)
+    if v and ghostBlock() then tFling.Set(false) return end
     settings.flingEnabled = v
     if v then settings.trollTrackEnabled = false settings.trollOrbitEnabled = false end
 end)
-createToggle(tr2, "Sentarse en su cabeza 🪑", function(v)
+table.insert(riskyToggles, tFling)
+local tHeadSit
+tHeadSit = createToggle(tr2, "Sentarse en su cabeza 🪑", function(v)
+    if v and ghostBlock() then tHeadSit.Set(false) return end
     settings.headSitEnabled = v
     if v then settings.trollTrackEnabled = false settings.trollOrbitEnabled = false end
 end)
+table.insert(riskyToggles, tHeadSit)
 createToggle(tr2, "Espectar seleccionado 📺", function(v)
     settings.spectateEnabled = v spectating = v
     if not v then pcall(function() camera.CameraSubject = myHum() end) end
@@ -711,8 +810,18 @@ end, false)
 
 -- WEAPON
 local w1 = createCard(pages["weapon"], "🔫 Armas", 190)
-createToggle(w1, "Munición infinita ♾️", function(v) settings.ammoEnabled = v end)
-createToggle(w1, "Rapid Fire (recarga rápida)", function(v) settings.rapidFire = v end)
+local tAmmo
+tAmmo = createToggle(w1, "Munición infinita ♾️", function(v)
+    if v and ghostBlock() then tAmmo.Set(false) return end
+    settings.ammoEnabled = v
+end)
+table.insert(riskyToggles, tAmmo)
+local tRapid
+tRapid = createToggle(w1, "Rapid Fire (recarga rápida)", function(v)
+    if v and ghostBlock() then tRapid.Set(false) return end
+    settings.rapidFire = v
+end)
+table.insert(riskyToggles, tRapid)
 createButton(w1, "🧹 Limpiar retroceso visual (reset cámara)", function()
     camera.FieldOfView = 70 notify("Weapon", "Cámara reseteada.")
 end, false)
@@ -757,6 +866,22 @@ createButton(wo2, "🚀 FPS BOOST (quitar lag)", function()
 end, true)
 
 -- CONFIG
+local function applyGhostOff()
+    for _, t in ipairs(riskyToggles) do pcall(function() t.Set(false) end) end
+    settings.hitboxEnabled = false settings.speedEnabled = false settings.jumpEnabled = false
+    settings.flyEnabled = false settings.noclipEnabled = false settings.spinEnabled = false
+    settings.wallbangEnabled = false settings.silentAimEnabled = false settings.bhopEnabled = false
+    settings.infJumpEnabled = false settings.ctrlClickTpEnabled = false settings.trollTrackEnabled = false
+    settings.trollOrbitEnabled = false settings.flingEnabled = false settings.headSitEnabled = false
+    settings.ammoEnabled = false settings.rapidFire = false
+    restoreDefaults()
+    pcall(function() workspace.Gravity = 196.2 end)
+end
+local cfGhost = createCard(pages["config"], "👻 Modo Fantasma (anti-ban)", 90)
+createToggle(cfGhost, "MODO FANTASMA (solo ESP + aim camara)", function(v)
+    settings.ghostMode = v
+    if v then applyGhostOff() notify("Fantasma", "Solo queda lo invisible al servidor: ESP + aimbot camara + luz.") end
+end)
 local cf1 = createCard(pages["config"], "🎨 Tema", 150)
 local themeRow = Instance.new("Frame") themeRow.Size = UDim2.new(1, 0, 0, 32) themeRow.BackgroundTransparency = 1 themeRow.Parent = cf1
 local themeLay = Instance.new("UIListLayout") themeLay.FillDirection = Enum.FillDirection.Horizontal themeLay.Padding = UDim.new(0, 8) themeLay.Parent = themeRow
@@ -773,7 +898,9 @@ end
 createToggle(cf1, "ESP arcoíris directo", function(v) settings.espRainbow = v end)
 createButton(cf1, "🔄 Resetear todo", function()
     for _, s in pairs(toggleStates) do pcall(function() s.Set(false) end) end
-    restoreDefaults() workspace.Gravity = 196.2 notify("Config", "Todo reseteado.")
+    restoreDefaults() workspace.Gravity = 196.2 restoreLighting()
+    pcall(function() camera.CameraSubject = myHum() camera.FieldOfView = 70 end)
+    notify("Config", "Todo reseteado y huellas limpiadas.")
 end, false)
 
 local cf2 = createCard(pages["config"], "⌨️ Keybinds (F1-F6 + UI)", 330)
@@ -805,8 +932,10 @@ end)
 
 local cf3 = createCard(pages["config"], "👤 Cuenta & Salir", 150)
 createButton(cf3, "🔁 Rejoin (reentrar)", function() game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer) end, false)
-createButton(cf3, "🗑️ Destruir Zvolt", function()
-    restoreDefaults() pcall(function() camera.CameraSubject = myHum() end) gui:Destroy()
+createButton(cf3, "🗑️ Destruir Zvolt (pánico: restaura todo)", function()
+    restoreDefaults() restoreLighting()
+    pcall(function() workspace.Gravity = 196.2 end)
+    pcall(function() camera.CameraSubject = myHum() camera.FieldOfView = 70 end) gui:Destroy()
 end, false)
 
 --// Botón flotante fresco
@@ -859,7 +988,7 @@ UserInputService.InputBegan:Connect(function(inp, gp)
     if gp then return end
     if inp.UserInputType == Enum.UserInputType.Keyboard then
         if inp.KeyCode == settings.uiToggleKey then mainFrame.Visible = not mainFrame.Visible end
-        if inp.KeyCode == Enum.KeyCode.Space and settings.infJumpEnabled and myHum() then
+        if inp.KeyCode == Enum.KeyCode.Space and settings.infJumpEnabled and not settings.ghostMode and myHum() then
             myHum():ChangeState(Enum.HumanoidStateType.Jumping)
         end
         for feat, kc in pairs(keybinds) do
@@ -1224,7 +1353,7 @@ RunService.RenderStepped:Connect(function(dt)
     -- Troll track / orbit / head sit / fling
     local tp = settings.selectedTpPlayer
     local r = myRoot() local h = myHum()
-    if tp and tp.Character and r and (settings.trollTrackEnabled or settings.trollOrbitEnabled or settings.headSitEnabled or settings.flingEnabled) then
+    if tp and tp.Character and r and not settings.ghostMode and (settings.trollTrackEnabled or settings.trollOrbitEnabled or settings.headSitEnabled or settings.flingEnabled) then
         local tr = targetRootOf(tp)
         if tr then
             if settings.trollTrackEnabled then
@@ -1264,43 +1393,22 @@ RunService.RenderStepped:Connect(function(dt)
         if th then camera.CameraSubject = th end
     end
     -- spinbot
-    if settings.spinEnabled and r and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.flingEnabled then
+    if settings.spinEnabled and not settings.ghostMode and r and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.flingEnabled then
         r.CFrame = r.CFrame * CFrame.Angles(0, math.rad(settings.spinSpeed), 0)
     end
-    -- noclip
+    -- noclip (solo escribe si hace falta: menos escrituras = menos huellas)
     if settings.noclipEnabled and localPlayer.Character then
         for _, part in ipairs(localPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
+            if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
         end
     end
-    -- hitbox
-    if settings.hitboxEnabled then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= localPlayer and p.Character then
-                local part = p.Character:FindFirstChild("Head") or p.Character:FindFirstChild("HumanoidRootPart")
-                if part and part:IsA("BasePart") then
-                    if not hitboxOriginals[part] then hitboxOriginals[part] = part.Size end
-                    part.Size = Vector3.new(settings.hitboxSize, settings.hitboxSize, settings.hitboxSize)
-                    part.Transparency = 0.6 part.CanCollide = false
-                end
-            end
-        end
-    end
-    -- wallbang visual (quitar colisión de enemigos para pegar)
-    if settings.wallbangEnabled then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= localPlayer and p.Character then
-                for _, part in ipairs(p.Character:GetDescendants()) do
-                    if part:IsA("BasePart") then part.CanCollide = false end
-                end
-            end
-        end
-    end
-    -- speed / jump / bhop
+    -- NOTA: hitbox y wallbang se aplican en el loop lento (0.5s), no cada frame.
+    -- speed / jump / bhop (solo escribir si cambió el valor)
     local ch = myHum()
-    if ch and not settings.trollTrackEnabled and not settings.trollOrbitEnabled then
-        ch.WalkSpeed = settings.speedEnabled and settings.customSpeed or DEFAULT_SPEED
-        if settings.jumpEnabled then ch.JumpPower = settings.customJump ch.UseJumpPower = true end
+    if ch and not settings.ghostMode and not settings.trollTrackEnabled and not settings.trollOrbitEnabled then
+        local wantSpeed = settings.speedEnabled and settings.customSpeed or DEFAULT_SPEED
+        if ch.WalkSpeed ~= wantSpeed then ch.WalkSpeed = wantSpeed end
+        if settings.jumpEnabled and ch.JumpPower ~= settings.customJump then ch.JumpPower = settings.customJump ch.UseJumpPower = true end
         if settings.bhopEnabled and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
             if ch.FloorMaterial ~= Enum.Material.Air then ch:ChangeState(Enum.HumanoidStateType.Jumping) end
         end
@@ -1321,7 +1429,7 @@ RunService.Heartbeat:Connect(function(dt)
     local r = myRoot() local h = myHum()
     if not r or not h then return end
     local trollActive = settings.trollTrackEnabled or settings.trollOrbitEnabled or settings.flingEnabled
-    if settings.flyEnabled and not trollActive then
+    if settings.flyEnabled and not settings.ghostMode and not trollActive then
         h.PlatformStand = true
         local cf = camera.CFrame
         local mv = Vector3.zero
@@ -1365,7 +1473,7 @@ task.spawn(function()
             statsLabel.Text = "FPS: " .. fps .. " • PING: " .. tostring(ping)
         end
         -- infinite ammo + rapid fire (cada 0.25s para no laggear)
-        if settings.ammoEnabled or settings.rapidFire then
+        if (settings.ammoEnabled or settings.rapidFire) and not settings.ghostMode then
             local char = localPlayer.Character local bp = localPlayer:FindFirstChild("Backpack")
             for _, cont in ipairs({char, bp}) do
                 if cont then
@@ -1387,7 +1495,31 @@ task.spawn(function()
                 end
             end
         end
-        task.wait(0.25)
+        -- hitbox + wallbang en loop LENTO (0.5s) y solo si cambió: mucho menos detectable
+        if settings.hitboxEnabled and not settings.ghostMode then
+            local want = Vector3.new(settings.hitboxSize, settings.hitboxSize, settings.hitboxSize)
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= localPlayer and p.Character then
+                    local part = p.Character:FindFirstChild("Head") or p.Character:FindFirstChild("HumanoidRootPart")
+                    if part and part:IsA("BasePart") then
+                        if not hitboxOriginals[part] then hitboxOriginals[part] = part.Size end
+                        if part.Size ~= want then part.Size = want end
+                        if part.Transparency ~= 0.6 then part.Transparency = 0.6 end
+                        if part.CanCollide then part.CanCollide = false end
+                    end
+                end
+            end
+        end
+        if settings.wallbangEnabled and not settings.ghostMode then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= localPlayer and p.Character then
+                    for _, part in ipairs(p.Character:GetDescendants()) do
+                        if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
+                    end
+                end
+            end
+        end
+        task.wait(0.5)
     end
 end)
 
@@ -1417,5 +1549,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.2 SILENT", "Fresh edition cargado. RightShift = ocultar.")
-print("[ZVOLT V2.2 SILENT] cargado OK - silent arriba en Combat")
+notify("ZVOLT V2.4 GHOST", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.4 GHOST] cargado OK - modo fantasma en Config")
