@@ -33,6 +33,7 @@ local settings = {
     aimNpcs = false,
     aimBrute = false,
     aimScriptable = false,
+    aimDeadzone = 6,
     -- visuals
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
     espBox = true, espTracer = false, tracerOrigin = "Bottom", espChams = true, espTool = false,
@@ -247,7 +248,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.23 GRIP" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.24 FEEL" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -290,7 +291,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.23 GRIP" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.24 FEEL" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -627,6 +628,7 @@ createToggle(c1, "Fuerza bruta (sin humanoid/vida)", function(v) settings.aimBru
 local c2 = createCard(pages["combat"], "⭕ FOV & Suavizado", 190)
 createSlider(c2, "Radio FOV", settings.fovRadius, 40, 400, function(v) settings.fovRadius = v end)
 createSlider(c2, "Suavizado", settings.smoothing, 1, 100, function(v) settings.smoothing = v end)
+createSlider(c2, "Zona muerta (px, tu mouse manda)", settings.aimDeadzone, 0, 30, function(v) settings.aimDeadzone = v end)
 createToggle(c2, "Mostrar círculo FOV", function(v) settings.showFov = v end, nil, true)
 createToggle(c2, "FOV arcoíris 🌈", function(v) settings.fovRainbow = v end)
 
@@ -1530,6 +1532,13 @@ local function reapplyAim()
     forceCamType()
     local p = lastAimPart
     if not (p and p.Parent) then return end
+    do
+        local sp, on = camera:WorldToViewportPoint(p.Position)
+        if on then
+            local ref = aimRefPoint()
+            if (Vector2.new(sp.X, sp.Y) - ref).Magnitude <= (settings.aimDeadzone or 0) then return end
+        end
+    end
     local alphaV1 = settings.aimSnap and 1 or math.clamp(settings.smoothing / 100, 0.05, 1)
     pcall(function()
         camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, p.Position), alphaV1)
@@ -1540,7 +1549,6 @@ pcall(function()
     -- prioridad Last (2000): corre DESPUÉS de cualquier cámara del juego, justo antes del render
     RunService:BindToRenderStep("ZV_Aimbot", Enum.RenderPriority.Last.Value, function() reapplyAim() end)
 end)
-RunService.Heartbeat:Connect(function() reapplyAim() end)
 
 --// Loops principales
 local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -1640,11 +1648,14 @@ RunService.RenderStepped:Connect(function(dt)
                 aimStatus.Text = "AIM: LOCK " .. tostring(bestNameV1)
                 aimStatus.TextColor3 = Color3.fromRGB(80, 255, 130)
                 lastAimPart = bestPartV1
-                local alphaV1 = settings.aimSnap and 1 or math.clamp(settings.smoothing / 100, 0.05, 1)
-                pcall(function()
-                    camera.CFrame = camera.CFrame:Lerp(
-                        CFrame.new(camera.CFrame.Position, bestPartV1.Position), alphaV1)
-                end)
+                -- zona muerta: si ya estás encima del objetivo no toca la cámara (tu mouse manda)
+                if bestDV1 > (settings.aimDeadzone or 0) then
+                    local alphaV1 = settings.aimSnap and 1 or math.clamp(settings.smoothing / 100, 0.05, 1)
+                    pcall(function()
+                        camera.CFrame = camera.CFrame:Lerp(
+                            CFrame.new(camera.CFrame.Position, bestPartV1.Position), alphaV1)
+                    end)
+                end
             else
                 aimStatus.Text = string.format("AIM: 0 FOV (vivos:%d bots:%d partes:%d pant:%d)",
                     cAlive, cBots, cPart, cScreen)
@@ -1883,5 +1894,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.23 GRIP", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.23 GRIP] cargado OK - escritura al final + forzar camara")
+notify("ZVOLT V2.24 FEEL", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.24 FEEL] cargado OK - zona muerta, sin pelea con el mouse")
