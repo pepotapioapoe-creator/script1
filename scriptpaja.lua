@@ -1,5 +1,5 @@
 --[[
-    ZVOLT TRUE SILENT AIM & ESP (Funcional)
+    ZVOLT TRUE SILENT AIM (Vector Redirection) & ESP
 ]]--
 
 local Players = game:GetService("Players")
@@ -12,11 +12,11 @@ local SETTINGS = {
     SilentAim = true,
     ESPBox = true,
     ESPName = true,
-    FOV = 180,
-    TargetPart = "Head" -- Parte a la que impactará de forma silenciosa
+    FOV = 160,
+    TargetPart = "Head"
 }
 
---// Círculo de FOV (Drawing)
+--// FOV Circle
 local fovCircle = Drawing.new("Circle")
 fovCircle.Visible = true
 fovCircle.Radius = SETTINGS.FOV
@@ -25,7 +25,7 @@ fovCircle.Thickness = 1.5
 fovCircle.Filled = false
 fovCircle.Transparency = 0.8
 
---// Función para encontrar el objetivo más cercano dentro del FOV
+--// Encontrar objetivo más cercano dentro del FOV
 local function getClosestPlayer()
     local target = nil
     local shortestDist = SETTINGS.FOV
@@ -51,7 +51,7 @@ local function getClosestPlayer()
     return target
 end
 
---// Sistema ESP por Caché usando Drawing
+--// ESP Cache
 local espCache = {}
 
 local function clearESP(player)
@@ -62,36 +62,38 @@ local function clearESP(player)
     end
 end
 
---// Hook / Interceptor para el Silent Aim (Modifica el ratón o raycast al hacer clic sin mover la cámara)
+--// Hook de Namecall para interceptar Raycasts del juego y desviarlos al objetivo silenciosamente
 local mt = getrawmetatable(game)
-local oldIndex = mt.__index
+local oldNamecall = mt.__namecall
 setreadonly(mt, false)
 
--- Interceptamos la posición del Mouse para que, al disparar, el juego crea que hiciste clic directamente en la cabeza del enemigo
-mt.__index = newcclosure(function(self, idx)
-    if SETTINGS.SilentAim and self == localPlayer:GetMouse() and (idx == "Hit" or idx == "Target") then
-        local targetPart = getClosestPlayer()
-        if targetPart then
-            if idx == "Hit" then
-                return targetPart.CFrame
-            elseif idx == "Target" then
-                return targetPart
+mt.__namecall = newcclosure(function(self, ...)
+    local args = {...}
+    local method = getnamecallmethod()
+
+    if SETTINGS.SilentAim and (method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "Raycast") then
+        local target = getClosestPlayer()
+        if target then
+            local origin = args[1]
+            -- Si es un Raycast clásico o de Workspace
+            if method == "Raycast" and typeof(origin) == "Vector3" then
+                local direction = args[2]
+                args[2] = (target.Position - origin).Unit * direction.Magnitude
+                return oldNamecall(self, unpack(args))
             end
         end
     end
-    return oldIndex(self, idx)
+
+    return oldNamecall(self, unpack(args))
 end)
 setreadonly(mt, true)
 
---// Loop principal de renderizado (ESP y FOV)
+--// Loop Principal (ESP y FOV)
 RunService.RenderStepped:Connect(function()
     local mousePos = UserInputService:GetMouseLocation()
-    
-    -- Actualizar posición del FOV
     fovCircle.Position = mousePos
     fovCircle.Visible = SETTINGS.SilentAim
 
-    -- Gestionar ESP
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer then
             local char = player.Character
@@ -126,7 +128,6 @@ RunService.RenderStepped:Connect(function()
                     local height = math.abs(headPos.Y - legPos.Y)
                     local width = height * 0.5
 
-                    -- Actualizar Box
                     if SETTINGS.ESPBox then
                         data.Box.Size = Vector2.new(width, height)
                         data.Box.Position = Vector2.new(headPos.X - (width / 2), headPos.Y)
@@ -135,7 +136,6 @@ RunService.RenderStepped:Connect(function()
                         data.Box.Visible = false
                     end
 
-                    -- Actualizar Nombre
                     if SETTINGS.ESPName then
                         data.Name.Text = player.Name
                         data.Name.Position = Vector2.new(headPos.X, headPos.Y - 18)
