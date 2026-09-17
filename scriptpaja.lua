@@ -1,5 +1,5 @@
---[[--[[
-    ZVOLT ESP PURO (Sin Aimbot, Sin Movimiento de Cámara)
+--[[
+    ZVOLT TRUE SILENT AIM & ESP (Sin mover cámara)
 ]]--
 
 local Players = game:GetService("Players")
@@ -9,21 +9,103 @@ local localPlayer = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 local SETTINGS = {
-    ESPBox = true,
-    ESPName = true,
+    SilentAim = true,
+    ESP = true,
+    FOV = 150,
+    TargetPart = "Head"
 }
 
+-- Contenedor seguro para la interfaz
+local coreGui = gethui and gethui() or game:GetService("CoreGui")
+local gui = Instance.new("ScreenGui")
+gui.Name = "ZvoltSilent_" .. math.random(1000, 9999)
+gui.Parent = coreGui
+
+-- Círculo de FOV Visual (No afecta tu cámara)
+local fovCircle = Instance.new("Frame")
+fovCircle.Name = "FOVCircle"
+fovCircle.Size = UDim2.new(0, SETTINGS.FOV * 2, 0, SETTINGS.FOV * 2)
+fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+fovCircle.BackgroundTransparency = 1
+fovCircle.Visible = true
+fovCircle.Parent = gui
+
+local fovStroke = Instance.new("UIStroke")
+fovStroke.Color = Color3.fromRGB(255, 0, 128)
+fovStroke.Thickness = 1.5
+fovStroke.Parent = fovCircle
+
+local fovCorner = Instance.new("UICorner")
+fovCorner.CornerRadius = UDim.new(1, 0)
+fovCorner.Parent = fovCircle
+
+-- Función para encontrar el objetivo dentro del FOV
+local function getClosestTarget()
+    local target = nil
+    local shortestDist = SETTINGS.FOV
+    local mousePos = UserInputService:GetMouseLocation()
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            local part = player.Character:FindFirstChild(SETTINGS.TargetPart)
+            
+            if humanoid and humanoid.Health > 0 and part then
+                local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local magnitude = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    if magnitude < shortestDist then
+                        shortestDist = magnitude
+                        target = part
+                    end
+                end
+            end
+        end
+    end
+    return target
+end
+
+-- Hook de Silent Aim por Raycast (Redirige la bala/proyectil invisiblemente sin mover la cámara)
+local mt = getrawmetatable(game)
+local oldNamecall = mt.__namecall
+setreadonly(mt, false)
+
+mt.__namecall = newcclosure(function(self, ...)
+    local args = {...}
+    local method = getnamecallmethod()
+
+    if SETTINGS.SilentAim and (method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "Raycast") then
+        local targetPart = getClosestTarget()
+        if targetPart then
+            local origin = args[1]
+            if method == "Raycast" and typeof(origin) == "Vector3" then
+                local direction = args[2]
+                args[2] = (targetPart.Position - origin).Unit * direction.Magnitude
+                return oldNamecall(self, unpack(args))
+            end
+        end
+    end
+
+    return oldNamecall(self, unpack(args))
+end)
+setreadonly(mt, true)
+
+-- Sistema ESP por ScreenGui
 local espCache = {}
 
-local function clearESP(player)
+local function removeESP(player)
     if espCache[player] then
-        if espCache[player].Box then espCache[player].Box:Remove() end
-        if espCache[player].Name then espCache[player].Name:Remove() end
+        if espCache[player].Box then espCache[player].Box:Destroy() end
+        if espCache[player].Name then espCache[player].Name:Destroy() end
         espCache[player] = nil
     end
 end
 
 RunService.RenderStepped:Connect(function()
+    local mousePos = UserInputService:GetMouseLocation()
+    fovCircle.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
+    fovCircle.Visible = SETTINGS.SilentAim
+
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer then
             local char = player.Character
@@ -31,20 +113,24 @@ RunService.RenderStepped:Connect(function()
             local head = char and char:FindFirstChild("Head")
             local humanoid = char and char:FindFirstChildOfClass("Humanoid")
 
-            if char and root and head and humanoid and humanoid.Health > 0 then
+            if SETTINGS.ESP and char and root and head and humanoid and humanoid.Health > 0 then
                 if not espCache[player] then
-                    local box = Drawing.new("Square")
-                    box.Visible = false
-                    box.Color = Color3.fromRGB(0, 255, 200)
-                    box.Thickness = 1.5
-                    box.Filled = false
+                    local box = Instance.new("Frame")
+                    box.BackgroundTransparency = 1
+                    box.Parent = gui
 
-                    local name = Drawing.new("Text")
-                    name.Visible = false
-                    name.Color = Color3.fromRGB(255, 255, 255)
-                    name.Size = 14
-                    name.Center = true
-                    name.Outline = true
+                    local stroke = Instance.new("UIStroke")
+                    stroke.Color = Color3.fromRGB(0, 255, 200)
+                    stroke.Thickness = 1.5
+                    stroke.Parent = box
+
+                    local name = Instance.new("TextLabel")
+                    name.BackgroundTransparency = 1
+                    name.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    name.TextStrokeTransparency = 0.3
+                    name.TextSize = 12
+                    name.Font = Enum.Font.GothamBold
+                    name.Parent = gui
 
                     espCache[player] = {Box = box, Name = name}
                 end
@@ -54,36 +140,28 @@ RunService.RenderStepped:Connect(function()
 
                 if onScreen then
                     local headPos = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
-                    local legPos = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
-                    local height = math.abs(headPos.Y - legPos.Y)
+                    local height = math.abs(headPos.Y - camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0)).Y)
                     local width = height * 0.5
 
-                    if SETTINGS.ESPBox then
-                        data.Box.Size = Vector2.new(width, height)
-                        data.Box.Position = Vector2.new(headPos.X - (width / 2), headPos.Y)
-                        data.Box.Visible = true
-                    else
-                        data.Box.Visible = false
-                    end
+                    data.Box.Size = UDim2.new(0, width, 0, height)
+                    data.Box.Position = UDim2.new(0, headPos.X - (width / 2), 0, headPos.Y)
+                    data.Box.Visible = true
 
-                    if SETTINGS.ESPName then
-                        data.Name.Text = player.Name
-                        data.Name.Position = Vector2.new(headPos.X, headPos.Y - 18)
-                        data.Name.Visible = true
-                    else
-                        data.Name.Visible = false
-                    end
+                    data.Name.Text = player.Name
+                    data.Name.Position = UDim2.new(0, headPos.X - 50, 0, headPos.Y - 20)
+                    data.Name.Size = UDim2.new(0, 100, 0, 20)
+                    data.Name.Visible = true
                 else
                     data.Box.Visible = false
                     data.Name.Visible = false
                 end
             else
-                clearESP(player)
+                removeESP(player)
             end
         end
     end
 end)
 
 Players.PlayerRemoving:Connect(function(player)
-    clearESP(player)
+    removeESP(player)
 end)
