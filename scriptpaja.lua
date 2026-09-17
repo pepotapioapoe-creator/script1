@@ -25,6 +25,8 @@ local settings = {
     silentAimEnabled = false, silentHitChance = 100, silentPrediction = 0.12,
     silentBone = "Same as Aimbot", silentFov = 200,
     magicBulletsEnabled = false,
+    spyEnabled = false,
+    aimDebug = false,
     -- visuals
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
     espBox = true, espTracer = false, tracerOrigin = "Bottom", espChams = true, espTool = false,
@@ -233,7 +235,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.10 MAGIC" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.12 DEBUG" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -276,7 +278,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.10 MAGIC" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.12 DEBUG" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -593,6 +595,10 @@ tMagic = createToggle(c4, "Magic Bullets (balas teledirigidas) ⚠️", function
     notify("Magic Bullets", v and "Activadas (usan FOV + predicción del silent)" or "Desactivadas")
 end)
 table.insert(riskyToggles, tMagic)
+createToggle(c4, "SPY del arma (ver qué manda) 🔍", function(v)
+    settings.spyEnabled = v
+    if v then tryEnableSpy() notify("Spy", "Dispara varias veces y abre la consola con F9.") end
+end)
 
 local c1 = createCard(pages["combat"], "🎯 Aimbot", 250)
 createToggle(c1, "Aimbot (click derecho)", function(v) settings.aimEnabled = v currentAimTarget = nil end, "aimbot")
@@ -601,6 +607,7 @@ createDropdown(c1, "Hueso objetivo", {"Head", "HumanoidRootPart", "UpperTorso", 
 createToggle(c1, "Team Check (no apuntar aliados)", function(v) settings.teamCheck = v end)
 createToggle(c1, "Wall Check (no apuntar tras pared)", function(v) settings.wallCheck = v end)
 createToggle(c1, "Sticky Target (fijar objetivo)", function(v) settings.stickyTarget = v end)
+createToggle(c1, "Aimbot DEBUG (diagnóstico en F9)", function(v) settings.aimDebug = v end)
 
 local c2 = createCard(pages["combat"], "⭕ FOV & Suavizado", 190)
 createSlider(c2, "Radio FOV", settings.fovRadius, 40, 400, function(v) settings.fovRadius = v end)
@@ -1320,6 +1327,75 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
+--// SPY: registra qué manda tu arma (remotes/raycasts) en la consola F9. Solo LEE, indetectable.
+-- Úsalo una vez por juego: dispara varias veces, abre F9 y pasa el log para adaptar el silent exacto.
+local spyHooked = false
+local spyLast, spyTotal = {}, 0
+function tryEnableSpy()
+    if spyHooked then notify("Spy", "Ya instalado. Dispara y abre la consola (F9).") return end
+    local ok, msg = pcall(function()
+        local hm = hookmetamethod
+        local gncm = getnamecallmethod
+        local chk = checkcaller
+        local nc = (newcclosure and newcclosure) or function(f) return f end
+        if not (hm and gncm) then error("executor sin hookmetamethod") end
+        local oldSpy
+        oldSpy = hm(game, "__namecall", nc(function(self, ...)
+            local method = gncm()
+            if settings.spyEnabled then
+                local s, r = pcall(chk)
+                if not (s and r) then
+                    if method == "FireServer" or method == "InvokeServer" or method == "Raycast"
+                    or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList"
+                    or method == "FindPartOnRayWithWhitelist" then
+                        local nm = "?"
+                        pcall(function() nm = self:GetFullName() end)
+                        local key = method .. "|" .. nm
+                        local now = tick()
+                        if (spyLast[key] or 0) + 2 < now and spyTotal < 60 then
+                            spyLast[key] = now
+                            spyTotal = spyTotal + 1
+                            local n = select("#", ...)
+                            local parts = {}
+                            for i = 1, n do
+                                local a = select(i, ...)
+                                local t = typeof(a)
+                                if t == "Vector3" then parts[#parts + 1] = "V3" .. tostring(a)
+                                elseif t == "CFrame" then parts[#parts + 1] = "CF" .. tostring(a.Position)
+                                elseif t == "Ray" then parts[#parts + 1] = "Ray" .. tostring(a.Origin)
+                                elseif t == "Instance" then
+                                    local an = "?"
+                                    pcall(function() an = a:GetFullName() end)
+                                    parts[#parts + 1] = "Inst:" .. an
+                                else parts[#parts + 1] = t end
+                            end
+                            print("[ZVOLT-SPY]", method, nm, "n=" .. n, table.concat(parts, " | "))
+                        end
+                    end
+                end
+            end
+            return oldSpy(self, ...)
+        end))
+        spyHooked = true
+    end)
+    if spyHooked then notify("Spy", "Instalado. Dispara varias veces y abre F9.")
+    else notify("Spy", "Sin soporte de hooks: " .. tostring(msg)) end
+end
+local spyProjLast = 0
+workspace.DescendantAdded:Connect(function(inst)
+    if not settings.spyEnabled then return end
+    if not inst or not inst:IsA("BasePart") or inst.Anchored then return end
+    local mr = myRoot()
+    if not mr then return end
+    if (inst.Position - mr.Position).Magnitude > 30 then return end
+    if inst.AssemblyLinearVelocity.Magnitude < 30 then return end
+    local now = tick()
+    if now - spyProjLast < 1 then return end
+    spyProjLast = now
+    local pn = "?"
+    pcall(function() pn = inst:GetFullName() end)
+    print("[ZVOLT-SPY] parte rápida cerca:", pn, "vel:", math.floor(inst.AssemblyLinearVelocity.Magnitude))
+end)
 function tryEnableSilentAim()
     if silentHooked then return end
     local ok, msg = pcall(function()
@@ -1377,16 +1453,35 @@ function tryEnableSilentAim()
                         local aimRef = nil
                         pcall(function() aimRef = mouse.Hit.Position end)
                         silentBypass = false
-                        if aimRef then
+                        local lr = myRoot()
+                        if aimRef and lr then
                             local nargs = {}
                             for i = 1, n do nargs[i] = args[i] end
                             local changed = false
+                            -- 1) pares (origen, dirección): el formato más común (el server hace el raycast).
+                            -- Antes solo se tocaban posiciones y a veces se cambiaba el ORIGEN por error.
+                            for i = 1, n - 1 do
+                                local a, b = nargs[i], nargs[i + 1]
+                                if typeof(a) == "Vector3" and typeof(b) == "Vector3" then
+                                    local bm = b.Magnitude
+                                    local isDir = (bm > 0.85 and bm < 1.15)
+                                        or (bm > 1 and (b - aimRef).Magnitude > 30)
+                                    if isDir and (a - lr.Position).Magnitude < 25 then
+                                        local nd = hitPos - a
+                                        if nd.Magnitude > 0.5 then
+                                            nargs[i + 1] = nd.Unit * bm
+                                            changed = true
+                                        end
+                                    end
+                                end
+                            end
+                            -- 2) Vector3 de POSICIÓN cerca de tu mira pero LEJOS de ti (nunca el origen).
                             for i = 1, n do
                                 local a = nargs[i]
-                                -- solo Vector3 de POSICION cerca de tu mira (no direcciones, no CFrames de cámara)
                                 if typeof(a) == "Vector3" then
-                                    local d = (a - aimRef).Magnitude
-                                    if d > 3 and d <= 30 then
+                                    local dAim = (a - aimRef).Magnitude
+                                    local dMe = (a - lr.Position).Magnitude
+                                    if dAim > 3 and dAim <= 30 and dMe > 20 then
                                         nargs[i] = hitPos
                                         changed = true
                                     end
@@ -1427,6 +1522,51 @@ function tryEnableSilentAim()
     end
 end
 
+-- Diagnóstico del aimbot: dice POR QUÉ no hay objetivo (FOV, equipo, pared, modo).
+local aimDbgLast = 0
+local function aimDebugReport(tgt)
+    if not settings.aimDebug then return end
+    local now = tick()
+    if now - aimDbgLast < 1 then return end
+    aimDbgLast = now
+    local ref = aimRefPoint()
+    local alive, inFov, minPx, teamSkip, wallSkip = 0, 0, 1e9, 0, 0
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= localPlayer and isAlive(p) then
+            alive = alive + 1
+            if sameTeam(p, localPlayer) then
+                teamSkip = teamSkip + 1
+            else
+                local part = getAimPart(p.Character, settings.targetPart)
+                if part then
+                    local sp, on = camera:WorldToViewportPoint(part.Position)
+                    if on then
+                        local d = (Vector2.new(sp.X, sp.Y) - ref).Magnitude
+                        if d <= settings.fovRadius then
+                            local blocked = false
+                            if settings.wallCheck then
+                                blocked = hasWallBetween(camera.CFrame.Position, part.Position, part)
+                            end
+                            if blocked then
+                                wallSkip = wallSkip + 1
+                            else
+                                inFov = inFov + 1
+                                if d < minPx then minPx = d end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    print(string.format(
+        "[ZVOLT-AIM] vivos=%d enFOV=%d minPx=%s target=%s | modo=%s wall=%s team=%s fov=%d",
+        alive, inFov, (inFov > 0) and math.floor(minPx) or "-",
+        (tgt and tgt.Name) or "NINGUNO",
+        settings.aimMode, tostring(settings.wallCheck), tostring(settings.teamCheck),
+        settings.fovRadius))
+end
+
 -- El aimbot se aplica DESPUÉS de que el juego actualice su cámara.
 -- (Muchos juegos reescriben camera.CFrame cada frame y pisaban el aim anterior.)
 local hasMouseMove = (mousemoverel ~= nil)
@@ -1440,6 +1580,7 @@ local function runAimbot()
         return
     end
     local tgt = closestTarget()
+    aimDebugReport(tgt)
     if tgt and tgt.Character then
         local part = getAimPart(tgt.Character, settings.targetPart)
         if part then
@@ -1475,6 +1616,13 @@ if pcall(function()
 end) then
     useBoundAim = true
 end
+-- Segunda aplicación en Heartbeat: cubre juegos que mueven la cámara en Stepped/Heartbeat.
+-- (Dos escrituras por frame: la última antes del render siempre es la nuestra.)
+RunService.Heartbeat:Connect(function()
+    if useBoundAim and settings.aimEnabled and (aimingPC or aimingMobile) then
+        runAimbot()
+    end
+end)
 
 --// Loops principales
 local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -1699,5 +1847,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.10 MAGIC", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.10 MAGIC] cargado OK - magic bullets en Combat")
+notify("ZVOLT V2.12 DEBUG", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.12 DEBUG] cargado OK - doble aim + diagnostico en Combat")
