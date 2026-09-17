@@ -1,5 +1,5 @@
 --[[
-    ZVOLT LIGHTWEIGHT - SILENT AIM & ESP ONLY
+    ZVOLT LIGHTWEIGHT - SILENT AIM & ESP + UI COMPLETA
 ]]--
 
 local Players = game:GetService("Players")
@@ -11,20 +11,20 @@ local mouse = localPlayer:GetMouse()
 
 --// Configuración
 local settings = {
-	silentAimEnabled = true,
+	silentAimEnabled = false,
 	espEnabled = true,
 	espBox = true,
 	espSkeleton = true,
 	espTracers = true,
 	espNames = true,
-	fovRadius = 120, -- FOV independiente para el Silent Aim
-	targetPart = "Head", -- Parte a la que apunta (Head / HumanoidRootPart)
+	fovRadius = 120,
+	targetPart = "Head",
 	maxDistance = 1500
 }
 
---// GUI Principal para los dibujos y el FOV
+--// GUI Principal
 local gui = Instance.new("ScreenGui")
-gui.Name = "ZvoltMinimal_" .. math.random(10000, 99999)
+gui.Name = "ZvoltUI_" .. math.random(10000, 99999)
 gui.ResetOnSpawn = false
 gui.Parent = localPlayer:WaitForChild("PlayerGui")
 
@@ -34,16 +34,125 @@ fovCircle.Name = "SilentFOV"
 fovCircle.Size = UDim2.new(0, settings.fovRadius * 2, 0, settings.fovRadius * 2)
 fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
 fovCircle.BackgroundTransparency = 1
+fovCircle.Visible = false
 fovCircle.Parent = gui
 
 local fovStroke = Instance.new("UIStroke")
-fovStroke.Color = Color3.fromRGB(255, 0, 128) -- Color rosa/magenta distintivo
+fovStroke.Color = Color3.fromRGB(255, 0, 128)
 fovStroke.Thickness = 1.5
 fovStroke.Parent = fovCircle
 
 local fovCorner = Instance.new("UICorner")
 fovCorner.CornerRadius = UDim.new(1, 0)
 fovCorner.Parent = fovCircle
+
+--// Botón Flotante para Abrir/Cerrar Menú
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 80, 0, 35)
+toggleBtn.Position = UDim2.new(0, 30, 0, 30)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+toggleBtn.TextColor3 = Color3.fromRGB(0, 242, 255)
+toggleBtn.TextSize = 13
+toggleBtn.Font = Enum.Font.FredokaOne
+toggleBtn.Text = "ZVOLT"
+toggleBtn.Parent = gui
+
+local tbCorner = Instance.new("UICorner")
+tbCorner.CornerRadius = UDim.new(0, 6)
+tbCorner.Parent = toggleBtn
+
+local tbStroke = Instance.new("UIStroke")
+tbStroke.Color = Color3.fromRGB(0, 242, 255)
+tbStroke.Thickness = 1.2
+tbStroke.Parent = toggleBtn
+
+--// Menú Principal (Ventana)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 380)
+mainFrame.Position = UDim2.new(0, 30, 0, 80)
+mainFrame.BackgroundColor3 = Color3.fromRGB(13, 13, 17)
+mainFrame.Visible = true
+mainFrame.Parent = gui
+
+local mfCorner = Instance.new("UICorner")
+mfCorner.CornerRadius = UDim.new(0, 8)
+mfCorner.Parent = mainFrame
+
+local mfStroke = Instance.new("UIStroke")
+mfStroke.Color = Color3.fromRGB(35, 35, 45)
+mfStroke.Thickness = 1.5
+mfStroke.Parent = mainFrame
+
+-- Título del menú
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 40)
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = Color3.fromRGB(245, 245, 250)
+titleLabel.TextSize = 14
+titleLabel.Font = Enum.Font.FredokaOne
+titleLabel.Text = "SILENT AIM & ESP PANEL"
+titleLabel.Parent = mainFrame
+
+-- Contenedor de opciones
+local container = Instance.new("ScrollingFrame")
+container.Size = UDim2.new(1, -20, 1, -55)
+container.Position = UDim2.new(0, 10, 0, 45)
+container.BackgroundTransparency = 1
+container.CanvasSize = UDim2.new(0, 0, 0, 320)
+container.ScrollBarThickness = 2
+container.Parent = mainFrame
+
+local uiLayout = Instance.new("UIListLayout")
+uiLayout.Padding = UDim.new(0, 8)
+uiLayout.Parent = container
+
+-- Toggle Funcionalidad visual y lógica
+local function createToggleUI(text, initialValue, callback)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, 0, 0, 30)
+	btn.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+	btn.TextColor3 = initialValue and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(145, 145, 165)
+	btn.TextSize = 12
+	btn.Font = Enum.Font.GothamMedium
+	btn.Text = "  " .. text
+	btn.TextXAlignment = Enum.TextXAlignment.Left
+	btn.Parent = container
+
+	local bCorner = Instance.new("UICorner")
+	bCorner.CornerRadius = UDim.new(0, 5)
+	bCorner.Parent = btn
+
+	local indicator = Instance.new("Frame")
+	indicator.Size = UDim2.new(0, 14, 0, 14)
+	indicator.Position = UDim2.new(1, -22, 0.5, -7)
+	indicator.BackgroundColor3 = initialValue and Color3.fromRGB(0, 242, 255) or Color3.fromRGB(35, 35, 45)
+	indicator.Parent = btn
+
+	local iCorner = Instance.new("UICorner")
+	iCorner.CornerRadius = UDim.new(0, 3)
+	iCorner.Parent = indicator
+
+	local state = initialValue
+	btn.MouseButton1Click:Connect(function()
+		state = not state
+		btn.TextColor3 = state and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(145, 145, 165)
+		indicator.BackgroundColor3 = state and Color3.fromRGB(0, 242, 255) or Color3.fromRGB(35, 35, 45)
+		callback(state)
+	end)
+end
+
+-- Crear controles en la interfaz
+createToggleUI("Silent Aim", settings.silentAimEnabled, function(v) settings.silentAimEnabled = v end)
+createToggleUI("ESP Global", settings.espEnabled, function(v) settings.espEnabled = v end)
+createToggleUI("ESP Box", settings.espBox, function(v) settings.espBox = v end)
+createToggleUI("ESP Skeleton", settings.espSkeleton, function(v) settings.espSkeleton = v end)
+createToggleUI("ESP Tracers (Líneas)", settings.espTracers, function(v) settings.espTracers = v end)
+createToggleUI("ESP Names & HP", settings.espNames, function(v) settings.espNames = v end)
+
+-- Botón para abrir y cerrar el menú
+toggleBtn.MouseButton1Click:Connect(function()
+	mainFrame.Visible = not mainFrame.Visible
+end)
 
 --// Conexiones de Huesos para el ESP Skeleton
 local skeletonBones = {
@@ -143,7 +252,7 @@ local function getClosestPlayerInFOV()
 	return closestPlayer
 end
 
---// Hook de Silent Aim (Redirige los disparos o raycasts al blanco)
+--// Hook de Silent Aim
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
 setreadonly(mt, false)
@@ -170,7 +279,7 @@ mt.__namecall = newcclosure(function(self, ...)
 end)
 setreadonly(mt, true)
 
---// Loop principal para renderizar ESP y actualizar el FOV en pantalla
+--// Loop principal
 RunService.RenderStepped:Connect(function()
 	local mousePos = UserInputService:GetMouseLocation()
 	fovCircle.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
@@ -206,7 +315,7 @@ RunService.RenderStepped:Connect(function()
 							data.Box.Visible = false
 						end
 
-						-- ESP Tracers (Líneas)
+						-- ESP Tracers
 						if settings.espTracers and onScreen then
 							local viewportSize = camera.ViewportSize
 							local startVector = Vector2.new(viewportSize.X / 2, viewportSize.Y)
@@ -214,8 +323,7 @@ RunService.RenderStepped:Connect(function()
 							local magnitude = (endVector - startVector).Magnitude
 							data.Tracer.Size = UDim2.new(0, 1, 0, magnitude)
 							data.Tracer.Position = UDim2.new(0, (startVector.X + endVector.X) / 2, 0, (startVector.Y + endVector.Y) / 2)
-							data.Trension = math.deg(math.atan2(endVector.Y - startVector.Y, endVector.X - startVector.X)) - 90
-							data.Tracer.Rotation = data.Trension
+							data.Tracer.Rotation = math.deg(math.atan2(endVector.Y - startVector.Y, endVector.X - startVector.X)) - 90
 							data.Tracer.Visible = true
 						else
 							data.Tracer.Visible = false
