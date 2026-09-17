@@ -237,7 +237,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.14 CLASSIC" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.15 V1AIM" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -280,7 +280,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.14 CLASSIC" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.15 V1AIM" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -590,6 +590,8 @@ createSlider(c4, "Prediccion", 12, 0, 50, function(v) settings.silentPrediction 
 createDropdown(c4, "Hueso silent", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "Same as Aimbot"}, "Same as Aimbot", function(v)
     settings.silentBone = v
 end)
+createToggle(c4, "Team Check (no apuntar aliados)", function(v) settings.teamCheck = v end)
+createToggle(c4, "Wall Check (respeta paredes)", function(v) settings.wallCheck = v end)
 local tMagic
 tMagic = createToggle(c4, "Magic Bullets (balas teledirigidas) ⚠️", function(v)
     if v and ghostBlock() then tMagic.Set(false) return end
@@ -603,15 +605,9 @@ createToggle(c4, "SPY del arma (ver qué manda) 🔍", function(v)
 end)
 
 local c1 = createCard(pages["combat"], "🎯 Aimbot", 250)
-createToggle(c1, "Aimbot (click derecho)", function(v) settings.aimEnabled = v currentAimTarget = nil end, "aimbot")
-createDropdown(c1, "Modo de apuntado", {"Camera", "Mouse"}, "Camera", function(v) settings.aimMode = v end)
+createToggle(c1, "Aimbot (click derecho)", function(v) settings.aimEnabled = v end, "aimbot")
 createDropdown(c1, "Hueso objetivo", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}, "Head", function(v) settings.targetPart = v end)
-createToggle(c1, "Team Check (no apuntar aliados)", function(v) settings.teamCheck = v end)
-createToggle(c1, "Wall Check (no apuntar tras pared)", function(v) settings.wallCheck = v end)
-createToggle(c1, "Sticky Target (fijar objetivo)", function(v) settings.stickyTarget = v end)
-createToggle(c1, "Aimbot DEBUG (diagnóstico en F9)", function(v) settings.aimDebug = v end)
 createToggle(c1, "Modo AUTO (apunta solo, sin clic)", function(v) settings.aimAuto = v end)
-createToggle(c1, "Modo CLÁSICO V1 (si el nuevo falla)", function(v) settings.aimClassic = v currentAimTarget = nil end)
 
 local c2 = createCard(pages["combat"], "⭕ FOV & Suavizado", 190)
 createSlider(c2, "Radio FOV", settings.fovRadius, 40, 400, function(v) settings.fovRadius = v end)
@@ -978,7 +974,6 @@ end, false)
 createButton(cf3, "🗑️ Destruir Zvolt (pánico: restaura todo)", function()
     restoreDefaults() restoreLighting()
     pcall(function() workspace.Gravity = 196.2 end)
-    pcall(function() RunService:UnbindFromRenderStep("ZV_Aimbot") end)
     pcall(function() camera.CameraSubject = myHum() camera.FieldOfView = 70 end) gui:Destroy()
 end, false)
 
@@ -1027,8 +1022,9 @@ aimBtn.InputEnded:Connect(function(i) aimingMobile = false aimBtn.BackgroundColo
 
 --// Inputs globales
 local aimingPC = false
+local isAimingRightClick = false
 UserInputService.InputBegan:Connect(function(inp, gp)
-    if inp.UserInputType == Enum.UserInputType.MouseButton2 then aimingPC = true end
+    if inp.UserInputType == Enum.UserInputType.MouseButton2 then aimingPC = true isAimingRightClick = true end
     if gp then return end
     if inp.UserInputType == Enum.UserInputType.Keyboard then
         if inp.KeyCode == settings.uiToggleKey then mainFrame.Visible = not mainFrame.Visible end
@@ -1051,7 +1047,7 @@ UserInputService.InputBegan:Connect(function(inp, gp)
     end
 end)
 UserInputService.InputEnded:Connect(function(inp)
-    if inp.UserInputType == Enum.UserInputType.MouseButton2 then aimingPC = false end
+    if inp.UserInputType == Enum.UserInputType.MouseButton2 then aimingPC = false isAimingRightClick = false end
 end)
 -- anti afk
 Players.LocalPlayer.Idled:Connect(function()
@@ -1203,39 +1199,6 @@ local function getAimPart(char, bone)
     if not char then return nil end
     return char:FindFirstChild(bone) or char:FindFirstChild("Head")
         or char:FindFirstChild("HumanoidRootPart") or char:FindFirstChildWhichIsA("BasePart")
-end
-
---// Aimbot con wall/team check
-local function closestTarget()
-    if settings.stickyTarget and currentAimTarget and isAlive(currentAimTarget) then
-        local tp = currentAimTarget.Character and (currentAimTarget.Character:FindFirstChild(settings.targetPart) or currentAimTarget.Character:FindFirstChild("Head"))
-        if tp then
-            local sp, on = camera:WorldToViewportPoint(tp.Position)
-            if on and (Vector2.new(sp.X, sp.Y) - aimRefPoint()).Magnitude <= settings.fovRadius then
-                return currentAimTarget
-            end
-        end
-        currentAimTarget = nil
-    end
-    local best, bestD = nil, settings.fovRadius
-    local ml = aimRefPoint()
-    local lr = myRoot()
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= localPlayer and isAlive(p) and not sameTeam(p, localPlayer) then
-            local tp = getAimPart(p.Character, settings.targetPart)
-            if tp and lr and (lr.Position - tp.Position).Magnitude <= settings.maxDistance then
-                if not hasWallBetween(camera.CFrame.Position, tp.Position, tp) then
-                    local sp, on = camera:WorldToViewportPoint(tp.Position)
-                    if on then
-                        local d = (Vector2.new(sp.X, sp.Y) - ml).Magnitude
-                        if d <= settings.fovRadius and d < bestD then bestD = d best = p end
-                    end
-                end
-            end
-        end
-    end
-    currentAimTarget = best
-    return best
 end
 
 --// SILENT AIM 👻 (redirige tiros sin mover la cámara)
@@ -1526,143 +1489,7 @@ function tryEnableSilentAim()
     end
 end
 
--- Diagnóstico del aimbot: dice POR QUÉ no hay objetivo (FOV, equipo, pared, modo).
-local aimDbgLast = 0
-local function aimDebugReport(tgt)
-    if not settings.aimDebug then return end
-    local now = tick()
-    if now - aimDbgLast < 1 then return end
-    aimDbgLast = now
-    local ref = aimRefPoint()
-    local alive, inFov, minPx, teamSkip, wallSkip = 0, 0, 1e9, 0, 0
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= localPlayer and isAlive(p) then
-            alive = alive + 1
-            if sameTeam(p, localPlayer) then
-                teamSkip = teamSkip + 1
-            else
-                local part = getAimPart(p.Character, settings.targetPart)
-                if part then
-                    local sp, on = camera:WorldToViewportPoint(part.Position)
-                    if on then
-                        local d = (Vector2.new(sp.X, sp.Y) - ref).Magnitude
-                        if d <= settings.fovRadius then
-                            local blocked = false
-                            if settings.wallCheck then
-                                blocked = hasWallBetween(camera.CFrame.Position, part.Position, part)
-                            end
-                            if blocked then
-                                wallSkip = wallSkip + 1
-                            else
-                                inFov = inFov + 1
-                                if d < minPx then minPx = d end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    print(string.format(
-        "[ZVOLT-AIM] vivos=%d enFOV=%d minPx=%s target=%s | modo=%s wall=%s team=%s fov=%d",
-        alive, inFov, (inFov > 0) and math.floor(minPx) or "-",
-        (tgt and tgt.Name) or "NINGUNO",
-        settings.aimMode, tostring(settings.wallCheck), tostring(settings.teamCheck),
-        settings.fovRadius))
-end
-
--- El aimbot se aplica DESPUÉS de que el juego actualice su cámara.
--- (Muchos juegos reescriben camera.CFrame cada frame y pisaban el aim anterior.)
-local hasMouseMove = (mousemoverel ~= nil)
-local useBoundAim = false
-local function runAimbot()
-    if not camera then return end
-    if settings.aimClassic then return end -- el clásico corre en su propio loop abajo
-    local aiming = settings.aimEnabled and (settings.aimAuto or aimingPC or aimingMobile)
-    snapLine.Visible = false
-    if not aiming then
-        if not settings.stickyTarget then currentAimTarget = nil end
-        return
-    end
-    local tgt = closestTarget()
-    aimDebugReport(tgt)
-    if tgt and tgt.Character then
-        local part = getAimPart(tgt.Character, settings.targetPart)
-        if part then
-            local ml = aimRefPoint()
-            local sp, on = camera:WorldToViewportPoint(part.Position)
-            if on then
-                local startV = Vector2.new(ml.X, ml.Y) local endV = Vector2.new(sp.X, sp.Y)
-                local d = (endV - startV).Magnitude
-                if d > 2 then
-                    snapLine.Size = UDim2.new(0, 1.5, 0, d)
-                    snapLine.Position = UDim2.new(0, (startV.X + endV.X) / 2, 0, (startV.Y + endV.Y) / 2)
-                    snapLine.Rotation = math.deg(math.atan2(endV.Y - startV.Y, endV.X - startV.X)) - 90
-                    snapLine.Visible = true
-                end
-                local alpha = math.clamp(settings.smoothing / 100, 0.05, 1)
-                if settings.aimMode == "Mouse" and hasMouseMove then
-                    pcall(function()
-                        mousemoverel((sp.X - ml.X) * alpha, (sp.Y - ml.Y) * alpha)
-                    end)
-                else
-                    -- Camera (y fallback si el executor no tiene mousemoverel)
-                    pcall(function()
-                        camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, part.Position), alpha)
-                    end)
-                end
-            end
-        end
-    end
-end
-pcall(function() RunService:UnbindFromRenderStep("ZV_Aimbot") end)
-if pcall(function()
-    RunService:BindToRenderStep("ZV_Aimbot", Enum.RenderPriority.Camera.Value + 1, function() runAimbot() end)
-end) then
-    useBoundAim = true
-end
--- Segunda aplicación en Heartbeat: cubre juegos que mueven la cámara en Stepped/Heartbeat.
--- (Dos escrituras por frame: la última antes del render siempre es la nuestra.)
-RunService.Heartbeat:Connect(function()
-    if useBoundAim and not settings.aimClassic and settings.aimEnabled and (settings.aimAuto or aimingPC or aimingMobile) then
-        runAimbot()
-    end
-end)
--- MODO CLÁSICO: la fórmula exacta del V1 que sí funciona (RenderStepped plano,
--- sin team/wall/sticky checks, lerp directo). Si el nuevo pipeline falla en un juego, este anda.
-RunService.RenderStepped:Connect(function()
-    if not (settings.aimEnabled and settings.aimClassic) then return end
-    if not (aimingPC or aimingMobile or settings.aimAuto) then return end
-    if not camera or not localPlayer.Character then return end
-    local ml = UserInputService:GetMouseLocation()
-    local lr = myRoot()
-    local bestPart, bestD = nil, settings.fovRadius
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= localPlayer and player.Character and localPlayer.Character then
-            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            local tp = player.Character:FindFirstChild(settings.targetPart) or player.Character:FindFirstChild("Head")
-            if humanoid and humanoid.Health > 0 and tp and lr then
-                if (lr.Position - tp.Position).Magnitude <= settings.maxDistance then
-                    local sp, on = camera:WorldToViewportPoint(tp.Position)
-                    if on then
-                        local d = (Vector2.new(sp.X, sp.Y) - ml).Magnitude
-                        if d <= settings.fovRadius and d < bestD then
-                            bestD = d
-                            bestPart = tp
-                        end
-                    end
-                end
-            end
-        end
-    end
-    if bestPart then
-        pcall(function()
-            camera.CFrame = camera.CFrame:Lerp(
-                CFrame.new(camera.CFrame.Position, bestPart.Position),
-                math.clamp(settings.smoothing / 100, 0.05, 1))
-        end)
-    end
-end)
+-- El aimbot V1 corre en el loop principal abajo (RenderStepped plano, como el original).
 
 --// Loops principales
 local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -1692,9 +1519,37 @@ RunService.RenderStepped:Connect(function(dt)
     else
         for p, _ in pairs(espData) do clearESP(p) end
     end
-    -- Aimbot: corre DESPUÉS de la cámara del juego vía BindToRenderStep (ver runAimbot).
-    -- Si el bind falló, se corre aquí como antes.
-    if not useBoundAim then runAimbot() end
+    -- Aimbot estilo V1: RenderStepped plano, sin filtros extra. Fórmula del original que sí funciona.
+    if settings.aimEnabled and (isAimingRightClick or aimingMobile or settings.aimAuto) then
+        local ml2 = UserInputService:GetMouseLocation()
+        local lr2 = myRoot()
+        local bestPartV1, bestDV1 = nil, settings.fovRadius
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= localPlayer and player.Character and localPlayer.Character then
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                local tp = player.Character:FindFirstChild(settings.targetPart) or player.Character:FindFirstChild("Head")
+                if humanoid and humanoid.Health > 0 and tp and lr2 then
+                    if (lr2.Position - tp.Position).Magnitude <= settings.maxDistance then
+                        local sp, on = camera:WorldToViewportPoint(tp.Position)
+                        if on then
+                            local d = (Vector2.new(sp.X, sp.Y) - ml2).Magnitude
+                            if d <= settings.fovRadius and d < bestDV1 then
+                                bestDV1 = d
+                                bestPartV1 = tp
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        if bestPartV1 then
+            pcall(function()
+                camera.CFrame = camera.CFrame:Lerp(
+                    CFrame.new(camera.CFrame.Position, bestPartV1.Position),
+                    math.clamp(settings.smoothing / 100, 0.05, 1))
+            end)
+        end
+    end
     -- Troll track / orbit / head sit / fling
     local tp = settings.selectedTpPlayer
     local r = myRoot() local h = myHum()
@@ -1887,5 +1742,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.14 CLASSIC", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.14 CLASSIC] cargado OK - modo clasico V1 en Combat")
+notify("ZVOLT V2.15 V1AIM", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.15 V1AIM] cargado OK - aimbot V1 restaurado")
