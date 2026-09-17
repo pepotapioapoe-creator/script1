@@ -32,6 +32,7 @@ local settings = {
     aimSnap = false,
     aimNpcs = false,
     aimBrute = false,
+    aimScriptable = false,
     -- visuals
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
     espBox = true, espTracer = false, tracerOrigin = "Bottom", espChams = true, espTool = false,
@@ -246,7 +247,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.21 BRUTE" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.23 GRIP" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -289,7 +290,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.21 BRUTE" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.23 GRIP" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -618,6 +619,7 @@ createToggle(c1, "Aimbot (click derecho)", function(v) settings.aimEnabled = v e
 createDropdown(c1, "Hueso objetivo", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}, "Head", function(v) settings.targetPart = v end)
 createToggle(c1, "Modo AUTO (apunta solo, sin clic)", function(v) settings.aimAuto = v end)
 createToggle(c1, "SNAP directo (sin suavizado)", function(v) settings.aimSnap = v end)
+createToggle(c1, "Forzar cámara (si el juego la pisa)", function(v) settings.aimScriptable = v end)
 createToggle(c1, "Incluir NPCs/bots", function(v) settings.aimNpcs = v end)
 createToggle(c1, "Diagnóstico profundo (F9)", function(v) settings.aimDebug = v end)
 createToggle(c1, "Fuerza bruta (sin humanoid/vida)", function(v) settings.aimBrute = v end)
@@ -943,6 +945,7 @@ createButton(cf1, "🔄 Resetear todo", function()
     applyGhostOff()
     for _, s in pairs(toggleStates) do pcall(function() s.Set(false) end) end
     restoreDefaults() workspace.Gravity = 196.2 restoreLighting()
+    pcall(restoreCamType)
     pcall(function() camera.CameraSubject = myHum() camera.FieldOfView = 70 end)
     notify("Config", "Todo reseteado y huellas limpiadas.")
 end, false)
@@ -987,6 +990,8 @@ end, false)
 createButton(cf3, "🗑️ Destruir Zvolt (pánico: restaura todo)", function()
     restoreDefaults() restoreLighting()
     pcall(function() workspace.Gravity = 196.2 end)
+    pcall(function() RunService:UnbindFromRenderStep("ZV_Aimbot") end)
+    pcall(restoreCamType)
     pcall(function() camera.CameraSubject = myHum() camera.FieldOfView = 70 end) gui:Destroy()
 end, false)
 
@@ -1504,9 +1509,43 @@ end
 
 -- El aimbot V1 corre en el loop principal abajo (RenderStepped plano, como el original).
 
+-- Re-aplicación post-cámara: el juego reescribe su cámara cada frame; con esto
+-- la última escritura siempre es la nuestra (Render + post-cámara + Heartbeat).
+prevCamType = nil
+function restoreCamType()
+    if prevCamType ~= nil then
+        pcall(function() camera.CameraType = prevCamType end)
+        prevCamType = nil
+    end
+end
+local function forceCamType()
+    if settings.aimScriptable and camera.CameraType ~= Enum.CameraType.Scriptable then
+        if prevCamType == nil then prevCamType = camera.CameraType end
+        pcall(function() camera.CameraType = Enum.CameraType.Scriptable end)
+    end
+end
+local function reapplyAim()
+    if not settings.aimEnabled then restoreCamType() return end
+    if not (isAimingRightClick or aimingMobile or settings.aimAuto) then restoreCamType() return end
+    forceCamType()
+    local p = lastAimPart
+    if not (p and p.Parent) then return end
+    local alphaV1 = settings.aimSnap and 1 or math.clamp(settings.smoothing / 100, 0.05, 1)
+    pcall(function()
+        camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, p.Position), alphaV1)
+    end)
+end
+pcall(function() RunService:UnbindFromRenderStep("ZV_Aimbot") end)
+pcall(function()
+    -- prioridad Last (2000): corre DESPUÉS de cualquier cámara del juego, justo antes del render
+    RunService:BindToRenderStep("ZV_Aimbot", Enum.RenderPriority.Last.Value, function() reapplyAim() end)
+end)
+RunService.Heartbeat:Connect(function() reapplyAim() end)
+
 --// Loops principales
 local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local aimDeepLast = 0
+local lastAimPart = nil -- último objetivo: se re-aplica post-cámara aunque el juego la pise
 RunService.RenderStepped:Connect(function(dt)
     -- La cámara puede ser REEMPLAZADA por el juego (rondas/respawns). Si usamos la vieja,
     -- todo da mal (pant:0) y escribimos en una cámara invisible. Re-leer cada frame lo arregla.
@@ -1600,6 +1639,7 @@ RunService.RenderStepped:Connect(function(dt)
             if bestPartV1 then
                 aimStatus.Text = "AIM: LOCK " .. tostring(bestNameV1)
                 aimStatus.TextColor3 = Color3.fromRGB(80, 255, 130)
+                lastAimPart = bestPartV1
                 local alphaV1 = settings.aimSnap and 1 or math.clamp(settings.smoothing / 100, 0.05, 1)
                 pcall(function()
                     camera.CFrame = camera.CFrame:Lerp(
@@ -1609,6 +1649,7 @@ RunService.RenderStepped:Connect(function(dt)
                 aimStatus.Text = string.format("AIM: 0 FOV (vivos:%d bots:%d partes:%d pant:%d)",
                     cAlive, cBots, cPart, cScreen)
                 aimStatus.TextColor3 = Color3.fromRGB(255, 200, 80)
+                lastAimPart = nil
                 if settings.aimDebug then
                     local nowDbg = tick()
                     if nowDbg - aimDeepLast > 2 then
@@ -1842,5 +1883,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.21 BRUTE", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.21 BRUTE] cargado OK - fuerza bruta sin humanoid")
+notify("ZVOLT V2.23 GRIP", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.23 GRIP] cargado OK - escritura al final + forzar camara")
