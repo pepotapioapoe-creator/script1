@@ -1,5 +1,5 @@
 --[[
-    ZVOLT DRAWING SILENT AIM & ESP (100% Funcional)
+    ZVOLT TRUE SILENT AIM & ESP (Funcional)
 ]]--
 
 local Players = game:GetService("Players")
@@ -12,11 +12,11 @@ local SETTINGS = {
     SilentAim = true,
     ESPBox = true,
     ESPName = true,
-    FOV = 150,
-    TargetPart = "Head" -- Puede ser Head o HumanoidRootPart
+    FOV = 180,
+    TargetPart = "Head" -- Parte a la que impactará de forma silenciosa
 }
 
---// Círculo de FOV (Dibujo nativo para evitar bugs de UI)
+--// Círculo de FOV (Drawing)
 local fovCircle = Drawing.new("Circle")
 fovCircle.Visible = true
 fovCircle.Radius = SETTINGS.FOV
@@ -62,21 +62,34 @@ local function clearESP(player)
     end
 end
 
---// Loop principal de renderizado y Silent Aim
+--// Hook / Interceptor para el Silent Aim (Modifica el ratón o raycast al hacer clic sin mover la cámara)
+local mt = getrawmetatable(game)
+local oldIndex = mt.__index
+setreadonly(mt, false)
+
+-- Interceptamos la posición del Mouse para que, al disparar, el juego crea que hiciste clic directamente en la cabeza del enemigo
+mt.__index = newcclosure(function(self, idx)
+    if SETTINGS.SilentAim and self == localPlayer:GetMouse() and (idx == "Hit" or idx == "Target") then
+        local targetPart = getClosestPlayer()
+        if targetPart then
+            if idx == "Hit" then
+                return targetPart.CFrame
+            elseif idx == "Target" then
+                return targetPart
+            end
+        end
+    end
+    return oldIndex(self, idx)
+end)
+setreadonly(mt, true)
+
+--// Loop principal de renderizado (ESP y FOV)
 RunService.RenderStepped:Connect(function()
     local mousePos = UserInputService:GetMouseLocation()
     
-    -- Actualizar FOV
+    -- Actualizar posición del FOV
     fovCircle.Position = mousePos
     fovCircle.Visible = SETTINGS.SilentAim
-
-    -- Silent Aim en tiempo de ejecución (Redirige el enfoque al disparar o apuntar)
-    if SETTINGS.SilentAim and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local targetPart = getClosestPlayer()
-        if targetPart then
-            camera.CFrame = CFrame.new(camera.CFrame.Position, targetPart.Position)
-        end
-    end
 
     -- Gestionar ESP
     for _, player in ipairs(Players:GetPlayers()) do
