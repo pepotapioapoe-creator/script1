@@ -29,6 +29,7 @@ local settings = {
     aimDebug = false,
     aimAuto = false,
     aimClassic = false,
+    aimSnap = false,
     -- visuals
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
     espBox = true, espTracer = false, tracerOrigin = "Bottom", espChams = true, espTool = false,
@@ -225,6 +226,12 @@ fovDot.BackgroundColor3 = Accent() fovDot.Parent = fovFrame corner(fovDot, 999) 
 local snapLine = Instance.new("Frame")
 snapLine.AnchorPoint = Vector2.new(0.5, 0.5) snapLine.BorderSizePixel = 0
 snapLine.BackgroundColor3 = Accent() snapLine.Visible = false snapLine.Parent = gui TagAccent(snapLine)
+-- Estado del aimbot en pantalla (diagnóstico en vivo, sin F9)
+local aimStatus = Instance.new("TextLabel")
+aimStatus.Size = UDim2.new(0, 260, 0, 18) aimStatus.Position = UDim2.new(0.5, -130, 1, -60)
+aimStatus.BackgroundTransparency = 1 aimStatus.Font = FONT_MAIN aimStatus.TextSize = 12
+aimStatus.TextColor3 = COLOR_SUBTEXT aimStatus.TextStrokeTransparency = 0.5
+aimStatus.Text = "" aimStatus.Parent = gui
 
 --// Pantalla de carga
 local loader = Instance.new("Frame")
@@ -237,7 +244,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.15 V1AIM" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.16 LOCK" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -280,7 +287,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.15 V1AIM" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.16 LOCK" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -608,6 +615,7 @@ local c1 = createCard(pages["combat"], "🎯 Aimbot", 250)
 createToggle(c1, "Aimbot (click derecho)", function(v) settings.aimEnabled = v end, "aimbot")
 createDropdown(c1, "Hueso objetivo", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}, "Head", function(v) settings.targetPart = v end)
 createToggle(c1, "Modo AUTO (apunta solo, sin clic)", function(v) settings.aimAuto = v end)
+createToggle(c1, "SNAP directo (sin suavizado)", function(v) settings.aimSnap = v end)
 
 local c2 = createCard(pages["combat"], "⭕ FOV & Suavizado", 190)
 createSlider(c2, "Radio FOV", settings.fovRadius, 40, 400, function(v) settings.fovRadius = v end)
@@ -1513,41 +1521,54 @@ RunService.RenderStepped:Connect(function(dt)
         -- el círculo se engrosa un instante cuando el silent redirige un tiro (confirmación visual)
         fovStroke.Thickness = (silentFlash > 0) and 3.5 or 1.6
     end
-    -- ESP
+    -- ESP (con pcall por jugador: si un personaje raro falla, no arrastra al aimbot)
     if settings.espEnabled then
-        for _, p in ipairs(Players:GetPlayers()) do if p ~= localPlayer then updateESP(p) end end
+        for _, p in ipairs(Players:GetPlayers()) do if p ~= localPlayer then pcall(updateESP, p) end end
     else
         for p, _ in pairs(espData) do clearESP(p) end
     end
     -- Aimbot estilo V1: RenderStepped plano, sin filtros extra. Fórmula del original que sí funciona.
-    if settings.aimEnabled and (isAimingRightClick or aimingMobile or settings.aimAuto) then
-        local ml2 = UserInputService:GetMouseLocation()
-        local lr2 = myRoot()
-        local bestPartV1, bestDV1 = nil, settings.fovRadius
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= localPlayer and player.Character and localPlayer.Character then
-                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-                local tp = player.Character:FindFirstChild(settings.targetPart) or player.Character:FindFirstChild("Head")
-                if humanoid and humanoid.Health > 0 and tp and lr2 then
-                    if (lr2.Position - tp.Position).Magnitude <= settings.maxDistance then
-                        local sp, on = camera:WorldToViewportPoint(tp.Position)
-                        if on then
-                            local d = (Vector2.new(sp.X, sp.Y) - ml2).Magnitude
-                            if d <= settings.fovRadius and d < bestDV1 then
-                                bestDV1 = d
-                                bestPartV1 = tp
+    do
+        local trigV1 = isAimingRightClick or aimingMobile or settings.aimAuto
+        if not settings.aimEnabled then
+            aimStatus.Text = ""
+        elseif not trigV1 then
+            aimStatus.Text = "AIM: ON - mantén click derecho"
+            aimStatus.TextColor3 = COLOR_SUBTEXT
+        else
+            local ml2 = UserInputService:GetMouseLocation()
+            local lr2 = myRoot()
+            local bestPartV1, bestDV1 = nil, settings.fovRadius
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= localPlayer and player.Character and localPlayer.Character then
+                    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                    local tp = player.Character:FindFirstChild(settings.targetPart) or player.Character:FindFirstChild("Head")
+                    if humanoid and humanoid.Health > 0 and tp and lr2 then
+                        if (lr2.Position - tp.Position).Magnitude <= settings.maxDistance then
+                            local sp, on = camera:WorldToViewportPoint(tp.Position)
+                            if on then
+                                local d = (Vector2.new(sp.X, sp.Y) - ml2).Magnitude
+                                if d <= settings.fovRadius and d < bestDV1 then
+                                    bestDV1 = d
+                                    bestPartV1 = tp
+                                end
                             end
                         end
                     end
                 end
             end
-        end
-        if bestPartV1 then
-            pcall(function()
-                camera.CFrame = camera.CFrame:Lerp(
-                    CFrame.new(camera.CFrame.Position, bestPartV1.Position),
-                    math.clamp(settings.smoothing / 100, 0.05, 1))
-            end)
+            if bestPartV1 then
+                aimStatus.Text = "AIM: LOCK"
+                aimStatus.TextColor3 = Color3.fromRGB(80, 255, 130)
+                local alphaV1 = settings.aimSnap and 1 or math.clamp(settings.smoothing / 100, 0.05, 1)
+                pcall(function()
+                    camera.CFrame = camera.CFrame:Lerp(
+                        CFrame.new(camera.CFrame.Position, bestPartV1.Position), alphaV1)
+                end)
+            else
+                aimStatus.Text = "AIM: sin objetivo en FOV"
+                aimStatus.TextColor3 = Color3.fromRGB(255, 200, 80)
+            end
         end
     end
     -- Troll track / orbit / head sit / fling
@@ -1742,5 +1763,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.15 V1AIM", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.15 V1AIM] cargado OK - aimbot V1 restaurado")
+notify("ZVOLT V2.16 LOCK", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.16 LOCK] cargado OK - aim con estado en pantalla")
