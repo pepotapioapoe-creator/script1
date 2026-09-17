@@ -206,7 +206,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.0" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.2 SILENT" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -249,7 +249,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.0" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.2 SILENT" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -531,7 +531,19 @@ local function createDropdown(parent, title, list, default, callback)
 end
 
 --// ===== CONSTRUIR PESTAÑAS =====
--- COMBAT
+-- COMBAT (Silent primero para que se vea sin hacer scroll)
+local c4 = createCard(pages["combat"], "👻 Silent Aim (tiros fantasma)", 200)
+createToggle(c4, "Silent Aim (redirige tiros sin apuntar)", function(v)
+    settings.silentAimEnabled = v
+    if v then tryEnableSilentAim() end
+    notify("Silent Aim", v and "Activado (usa el mismo FOV)" or "Desactivado")
+end, "silent")
+createSlider(c4, "Hit Chance %", settings.silentHitChance, 1, 100, function(v) settings.silentHitChance = v end)
+createSlider(c4, "Prediccion", 12, 0, 50, function(v) settings.silentPrediction = v / 100 end)
+createDropdown(c4, "Hueso silent", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "Same as Aimbot"}, "Same as Aimbot", function(v)
+    settings.silentBone = v
+end)
+
 local c1 = createCard(pages["combat"], "🎯 Aimbot", 250)
 createToggle(c1, "Aimbot (click derecho)", function(v) settings.aimEnabled = v currentAimTarget = nil end, "aimbot")
 createDropdown(c1, "Modo de apuntado", {"Camera", "Mouse"}, "Camera", function(v) settings.aimMode = v end)
@@ -550,18 +562,6 @@ local c3 = createCard(pages["combat"], "💥 Daño & Paredes", 150)
 createToggle(c3, "Hitbox Extender", function(v) settings.hitboxEnabled = v if not v then restoreDefaults() end end, "hitbox")
 createSlider(c3, "Tamaño Hitbox", settings.hitboxSize, 2, 25, function(v) settings.hitboxSize = v end)
 createToggle(c3, "Wallbang (golpear a través de pared)", function(v) settings.wallbangEnabled = v end)
-
-local c4 = createCard(pages["combat"], "👻 Silent Aim (tiros fantasma)", 200)
-createToggle(c4, "Silent Aim (redirige tiros sin apuntar)", function(v)
-    settings.silentAimEnabled = v
-    if v then tryEnableSilentAim() end
-    notify("Silent Aim", v and "Activado 👻 (usa el mismo FOV)" or "Desactivado")
-end, "silent")
-createSlider(c4, "Hit Chance %", settings.silentHitChance, 1, 100, function(v) settings.silentHitChance = v end)
-createSlider(c4, "Predicción", 12, 0, 50, function(v) settings.silentPrediction = v / 100 end)
-createDropdown(c4, "Hueso silent", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "Same as Aimbot"}, "Same as Aimbot", function(v)
-    settings.silentBone = v
-end)
 
 -- VISUALS
 local v1 = createCard(pages["visuals"], "👁️ ESP Principal", 280)
@@ -888,18 +888,28 @@ Players.LocalPlayer.Idled:Connect(function()
 end)
 
 --// ESP moderno (Barra de vida + Box + Tracer + Nombre)
+-- NOTA ANTI-BUG: el Character NUNCA se guarda en espData (solo Instances ESP).
+-- El character se trackea aparte en espCharOf, que clearESP jamás destruye.
 local espData = {}
+local espCharOf = {}
+local function safeDestroy(inst)
+    pcall(function()
+        if inst and typeof(inst) == "Instance" then
+            local cn = inst.ClassName
+            if cn == "Model" or cn == "Humanoid" or cn == "HumanoidRootPart" then return end
+            if Players:GetPlayerFromCharacter(inst) then return end
+            inst:Destroy()
+        end
+    end)
+end
 local function clearESP(plr)
     local o = espData[plr]
     if o then
-        pcall(function() if o.hl then o.hl:Destroy() end end)
-        pcall(function() if o.bb then o.bb:Destroy() end end)
-        pcall(function() if o.line then o.line:Destroy() end end)
-        pcall(function() if o.box then o.box:Destroy() end end)
-        -- OJO: nunca destruir o.char, o.name, o.hpBg, etc.
-        -- o.char es el Model del jugador y o.name/hp van dentro del Billboard (se borran solos)
+        safeDestroy(o.hl) safeDestroy(o.bb) safeDestroy(o.line) safeDestroy(o.box)
         espData[plr] = nil
     end
+    -- no tocamos espCharOf aquí a propósito en el loop por frame;
+    -- se actualiza solo en buildESP / respawn
 end
 local function espColor()
     if settings.espRainbow then return Color3.fromHSV(tick() % 5 / 5, 1, 1) end
@@ -927,7 +937,8 @@ local function buildESP(plr, char)
     tool.Size = UDim2.new(1, 0, 0, 14) tool.Position = UDim2.new(0, 0, 0, 28) tool.BackgroundTransparency = 1
     tool.Font = FONT_MAIN tool.TextSize = 10 tool.TextColor3 = Color3.fromRGB(255, 220, 120)
     tool.TextStrokeTransparency = 0.4 tool.Parent = bb objs.tool = tool
-    objs.bb = bb objs.char = char
+    objs.bb = bb
+    espCharOf[plr] = char
     local line = Instance.new("Frame")
     line.AnchorPoint = Vector2.new(0.5, 0.5) line.BorderSizePixel = 0 line.Visible = false line.Parent = gui objs.line = line
     local box = Instance.new("Frame")
@@ -940,7 +951,7 @@ local function updateESP(plr)
     local char = plr.Character local root = char and char:FindFirstChild("HumanoidRootPart")
     if not settings.espEnabled or not char or not root then clearESP(plr) return end
     local objs = espData[plr]
-    if not objs or objs.char ~= char then buildESP(plr, char) objs = espData[plr] if not objs then return end end
+    if not objs or espCharOf[plr] ~= char then buildESP(plr, char) objs = espData[plr] if not objs then return end end
     local hum = char:FindFirstChildOfClass("Humanoid")
     local lr = myRoot()
     if not hum or not lr then return end
@@ -1001,7 +1012,7 @@ local function updateESP(plr)
         else objs.box.Visible = false end
     else objs.box.Visible = false end
 end
-Players.PlayerRemoving:Connect(clearESP)
+Players.PlayerRemoving:Connect(function(plr) clearESP(plr) espCharOf[plr] = nil end)
 
 --// Aimbot con wall/team check
 local function closestTarget()
@@ -1402,5 +1413,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2 ✨", "Fresh edition cargado. RightShift = ocultar.")
-print("[ZVOLT V2] Fresh edition cargado ✅")
+notify("ZVOLT V2.2 SILENT", "Fresh edition cargado. RightShift = ocultar.")
+print("[ZVOLT V2.2 SILENT] cargado OK - silent arriba en Combat")
