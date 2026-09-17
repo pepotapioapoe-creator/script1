@@ -245,7 +245,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.17 FUNNEL" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.18 CAM" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -288,7 +288,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.17 FUNNEL" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.18 CAM" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -1504,6 +1504,10 @@ end
 --// Loops principales
 local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 RunService.RenderStepped:Connect(function(dt)
+    -- La cámara puede ser REEMPLAZADA por el juego (rondas/respawns). Si usamos la vieja,
+    -- todo da mal (pant:0) y escribimos en una cámara invisible. Re-leer cada frame lo arregla.
+    local freshCam = workspace.CurrentCamera
+    if freshCam then camera = freshCam end
     if not camera then return end
     -- FOV UI
     local ml = aimRefPoint()
@@ -1784,5 +1788,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.17 FUNNEL", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.17 FUNNEL] cargado OK - embudo visible + NPCs")
+notify("ZVOLT V2.18 CAM", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.18 CAM] cargado OK - camara fresca cada frame")
