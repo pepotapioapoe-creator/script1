@@ -1,5 +1,5 @@
 --[[
-    ZVOLT CONTROL PANEL - SILENT AIM & ESP
+    ZVOLT PANEL - UI CORREGIDA Y VISIBLE
 ]]--
 
 local Players = game:GetService("Players")
@@ -8,7 +8,6 @@ local UserInputService = game:GetService("UserInputService")
 local localPlayer = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- Configuración de Estados
 local Settings = {
     SilentAim = false,
     ESP = false,
@@ -16,11 +15,14 @@ local Settings = {
     TargetPart = "Head"
 }
 
--- Contenedor Seguro de UI
-local coreGui = gethui and gethui() or game:GetService("CoreGui")
+-- Contenedor ultra seguro usando PlayerGui para garantizar visibilidad
+local playerGui = localPlayer:WaitForChild("PlayerGui")
 local gui = Instance.new("ScreenGui")
-gui.Name = "ZvoltPanel_" .. math.random(1000, 9999)
-gui.Parent = coreGui
+gui.Name = "ZvoltPanelSafe"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
 
 --// CREACIÓN DE LA INTERFAZ (MENÚ)
 local mainFrame = Instance.new("Frame")
@@ -45,7 +47,7 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 13
 title.Parent = mainFrame
 
--- Función para crear botones estilizados
+-- Función para crear botones
 local function createButton(name, yPos, callback)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 180, 0, 35)
@@ -77,22 +79,19 @@ local function createButton(name, yPos, callback)
     end)
 end
 
--- Botón ESP
 createButton("ESP Boxes", 45, function(state)
     Settings.ESP = state
 end)
 
--- Botón Silent Aim
 createButton("Silent Aim", 90, function(state)
     Settings.SilentAim = state
 end)
 
--- Nota Informativa en el Menú
 local info = Instance.new("TextLabel")
 info.Size = UDim2.new(1, -20, 0, 30)
 info.Position = UDim2.new(0, 10, 0, 135)
 info.BackgroundTransparency = 1
-info.Text = "Arrastra desde cualquier parte"
+info.Text = "Panel Activo - Arrastrable"
 info.TextColor3 = Color3.fromRGB(100, 100, 110)
 info.Font = Enum.Font.Gotham
 info.TextSize = 10
@@ -115,7 +114,7 @@ local fovCorner = Instance.new("UICorner")
 fovCorner.CornerRadius = UDim.new(1, 0)
 fovCorner.Parent = fovCircle
 
---// Lógica para obtener objetivo cercano
+--// Lógica de objetivos
 local function getClosestTarget()
     local target = nil
     local shortestDist = Settings.FOV
@@ -141,7 +140,7 @@ local function getClosestTarget()
     return target
 end
 
---// Sistema ESP por Caché seguro
+--// Sistema ESP
 local espCache = {}
 
 local function removeESP(player)
@@ -152,13 +151,11 @@ local function removeESP(player)
     end
 end
 
---// Loop Principal
 RunService.RenderStepped:Connect(function()
     local mousePos = UserInputService:GetMouseLocation()
     fovCircle.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
     fovCircle.Visible = Settings.SilentAim
 
-    -- Gestionar ESP
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer then
             local char = player.Character
@@ -210,24 +207,6 @@ RunService.RenderStepped:Connect(function()
                 end
             else
                 removeESP(player)
-            end
-        end
-    end
-end)
-
---// Silent Aim por redirección de disparo limpia sin mover la cámara
-UserInputService.InputBegan:Connect(function(input)
-    if Settings.SilentAim and input.UserInputType == Enum.UserInputType.MouseButton1 then
-        local target = getClosestTarget()
-        if target then
-            -- Redirección directa del vector de enfoque de la herramienta/arma si el juego lo permite
-            local char = localPlayer.Character
-            local tool = char and char:FindFirstChildOfClass("Tool")
-            if tool then
-                -- Disparo asistido silencioso al hacer clic
-                pcall(function()
-                    -- Envía la posición del blanco de forma invisible para los sistemas basados en eventos de herramientas
-                end)
             end
         end
     end
