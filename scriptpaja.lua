@@ -22,6 +22,7 @@ local settings = {
     aimEnabled = false, aimMode = "Camera", teamCheck = false, wallCheck = false,
     stickyTarget = true, smoothing = 25, fovRadius = 140, showFov = true, fovRainbow = false,
     targetPart = "Head", hitboxEnabled = false, hitboxSize = 8, wallbangEnabled = false,
+    silentAimEnabled = false, silentHitChance = 100, silentPrediction = 0.12,
     -- visuals
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
     espBox = true, espTracer = false, tracerOrigin = "Bottom", espChams = true, espTool = false,
@@ -550,6 +551,18 @@ createToggle(c3, "Hitbox Extender", function(v) settings.hitboxEnabled = v if no
 createSlider(c3, "Tamaño Hitbox", settings.hitboxSize, 2, 25, function(v) settings.hitboxSize = v end)
 createToggle(c3, "Wallbang (golpear a través de pared)", function(v) settings.wallbangEnabled = v end)
 
+local c4 = createCard(pages["combat"], "👻 Silent Aim (tiros fantasma)", 200)
+createToggle(c4, "Silent Aim (redirige tiros sin apuntar)", function(v)
+    settings.silentAimEnabled = v
+    if v then tryEnableSilentAim() end
+    notify("Silent Aim", v and "Activado 👻 (usa el mismo FOV)" or "Desactivado")
+end, "silent")
+createSlider(c4, "Hit Chance %", settings.silentHitChance, 1, 100, function(v) settings.silentHitChance = v end)
+createSlider(c4, "Predicción", 12, 0, 50, function(v) settings.silentPrediction = v / 100 end)
+createDropdown(c4, "Hueso silent", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "Same as Aimbot"}, "Same as Aimbot", function(v)
+    settings.silentBone = v
+end)
+
 -- VISUALS
 local v1 = createCard(pages["visuals"], "👁️ ESP Principal", 280)
 createToggle(v1, "ESP Players", function(v) settings.espEnabled = v end, "esp")
@@ -877,7 +890,16 @@ end)
 --// ESP moderno (Barra de vida + Box + Tracer + Nombre)
 local espData = {}
 local function clearESP(plr)
-    if espData[plr] then for _, o in pairs(espData[plr]) do pcall(function() o:Destroy() end) end espData[plr] = nil end
+    local o = espData[plr]
+    if o then
+        pcall(function() if o.hl then o.hl:Destroy() end end)
+        pcall(function() if o.bb then o.bb:Destroy() end end)
+        pcall(function() if o.line then o.line:Destroy() end end)
+        pcall(function() if o.box then o.box:Destroy() end end)
+        -- OJO: nunca destruir o.char, o.name, o.hpBg, etc.
+        -- o.char es el Model del jugador y o.name/hp van dentro del Billboard (se borran solos)
+        espData[plr] = nil
+    end
 end
 local function espColor()
     if settings.espRainbow then return Color3.fromHSV(tick() % 5 / 5, 1, 1) end
@@ -1014,13 +1036,125 @@ local function closestTarget()
     return best
 end
 
+--// SILENT AIM 👻 (redirige tiros sin mover la cámara)
+settings.silentBone = settings.silentBone or "Same as Aimbot"
+local silentHooked = false
+local silentBypass = false -- en true = son nuestros propios raycasts (wallcheck), no redirigir
+local function silentBoneName()
+    if not settings.silentBone or settings.silentBone == "Same as Aimbot" then
+        return settings.targetPart
+    end
+    return settings.silentBone
+end
+local function getSilentHitPos()
+    if not settings.silentAimEnabled then return nil end
+    if math.random(1, 100) > (settings.silentHitChance or 100) then return nil end
+    local bone = silentBoneName()
+    local ml = UserInputService:GetMouseLocation()
+    local lr = myRoot()
+    local bestPart, bestD = nil, settings.fovRadius
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= localPlayer and isAlive(p) and not sameTeam(p, localPlayer) then
+            local part = p.Character and (p.Character:FindFirstChild(bone) or p.Character:FindFirstChild("Head"))
+            if part and lr and (lr.Position - part.Position).Magnitude <= settings.maxDistance then
+                silentBypass = true
+                local blocked = hasWallBetween(camera.CFrame.Position, part.Position, part)
+                silentBypass = false
+                if not blocked then
+                    local sp, on = camera:WorldToViewportPoint(part.Position)
+                    if on then
+                        local d = (Vector2.new(sp.X, sp.Y) - ml).Magnitude
+                        if d <= settings.fovRadius and d < bestD then
+                            bestD = d bestPart = part
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if bestPart then
+        local pred = settings.silentPrediction or 0.12
+        local vel = bestPart.Velocity
+        if vel.Magnitude > 60 then vel = vel.Unit * 60 end -- anti-fling loco
+        return bestPart.Position + (vel * pred), bestPart
+    end
+    return nil
+end
+function tryEnableSilentAim()
+    if silentHooked then return end
+    local ok, msg = pcall(function()
+        local hm = hookmetamethod
+        local gncm = getnamecallmethod
+        local chk = checkcaller
+        local nc = (newcclosure and newcclosure) or function(f) return f end
+        if not (hm and gncm) then error("executor sin hookmetamethod") end
+        -- 1) Hook Raycast / FindPartOnRay (juegos con balas físicas)
+        local oldNC
+        oldNC = hm(game, "__namecall", nc(function(self, ...)
+            local method = gncm()
+            local args = {...}
+            local function isExploitCall()
+                if chk then local s, r = pcall(chk) if s and r then return true end end
+                return false
+            end
+            if settings.silentAimEnabled and not silentBypass and not isExploitCall() then
+                if method == "Raycast" then
+                    local origin, dir = args[1], args[2]
+                    if origin and dir and typeof(origin) == "Vector3" and typeof(dir) == "Vector3" then
+                        local hitPos = getSilentHitPos()
+                        if hitPos then
+                            local mag = dir.Magnitude
+                            local newDir = (hitPos - origin).Unit * mag
+                            return oldNC(self, origin, newDir, args[3])
+                        end
+                    end
+                elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" or method == "FindPartOnRay" then
+                    local ray = args[1]
+                    if ray and typeof(ray) == "Ray" then
+                        local hitPos = getSilentHitPos()
+                        if hitPos then
+                            local newRay = Ray.new(ray.Origin, (hitPos - ray.Origin).Unit * ray.Direction.Magnitude)
+                            local nargs = {newRay}
+                            for i = 2, #args do nargs[i] = args[i] end
+                            return oldNC(self, table.unpack(nargs))
+                        end
+                    end
+                end
+            end
+            return oldNC(self, ...)
+        end))
+        -- 2) Hook Mouse.Hit / Mouse.Target (juegos que disparan con mouse.Hit)
+        local oldIdx
+        oldIdx = hm(game, "__index", nc(function(self, k)
+            if settings.silentAimEnabled and not silentBypass and (self == mouse) and (k == "Hit" or k == "Target") then
+                local s, r = pcall(checkcaller)
+                local exploitCall = (s and r)
+                if not exploitCall then
+                    local hitPos, part = getSilentHitPos()
+                    if hitPos then
+                        if k == "Hit" then return CFrame.new(hitPos) end
+                        if k == "Target" then return part end
+                    end
+                end
+            end
+            return oldIdx(self, k)
+        end))
+        silentHooked = true
+    end)
+    if silentHooked then
+        notify("Silent Aim 👻", "Hook instalado. Dispara cerca y pega solo.")
+    else
+        notify("Silent Aim ⚠️", "Tu executor no soporta hooks (" .. tostring(msg) .. "). Usa Aimbot normal.")
+    end
+end
+
 --// Loops principales
 local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 RunService.RenderStepped:Connect(function(dt)
     if not camera then return end
     -- FOV UI
     local ml = UserInputService:GetMouseLocation()
-    local wantFov = settings.aimEnabled and settings.showFov
+    local wantFov = (settings.aimEnabled or settings.silentAimEnabled) and settings.showFov
     fovFrame.Visible = wantFov
     aimBtn.Visible = settings.aimEnabled and isTouch
     if wantFov then
