@@ -1,5 +1,5 @@
 --[[
-    ZVOLT TRUE SILENT AIM (Vector Redirection) & ESP
+    ZVOLT - ESP & FOV PURPLES (Cámara 100% Libre, Sin Aimbot)
 ]]--
 
 local Players = game:GetService("Players")
@@ -9,14 +9,12 @@ local localPlayer = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 local SETTINGS = {
-    SilentAim = true,
     ESPBox = true,
     ESPName = true,
     FOV = 160,
-    TargetPart = "Head"
 }
 
---// FOV Circle
+--// Círculo de FOV (Visual)
 local fovCircle = Drawing.new("Circle")
 fovCircle.Visible = true
 fovCircle.Radius = SETTINGS.FOV
@@ -24,32 +22,6 @@ fovCircle.Color = Color3.fromRGB(255, 0, 128)
 fovCircle.Thickness = 1.5
 fovCircle.Filled = false
 fovCircle.Transparency = 0.8
-
---// Encontrar objetivo más cercano dentro del FOV
-local function getClosestPlayer()
-    local target = nil
-    local shortestDist = SETTINGS.FOV
-    local mousePos = UserInputService:GetMouseLocation()
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= localPlayer and player.Character then
-            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            local part = player.Character:FindFirstChild(SETTINGS.TargetPart)
-            
-            if humanoid and humanoid.Health > 0 and part then
-                local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
-                if onScreen then
-                    local magnitude = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                    if magnitude < shortestDist then
-                        shortestDist = magnitude
-                        target = part
-                    end
-                end
-            end
-        end
-    end
-    return target
-end
 
 --// ESP Cache
 local espCache = {}
@@ -62,37 +34,10 @@ local function clearESP(player)
     end
 end
 
---// Hook de Namecall para interceptar Raycasts del juego y desviarlos al objetivo silenciosamente
-local mt = getrawmetatable(game)
-local oldNamecall = mt.__namecall
-setreadonly(mt, false)
-
-mt.__namecall = newcclosure(function(self, ...)
-    local args = {...}
-    local method = getnamecallmethod()
-
-    if SETTINGS.SilentAim and (method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "Raycast") then
-        local target = getClosestPlayer()
-        if target then
-            local origin = args[1]
-            -- Si es un Raycast clásico o de Workspace
-            if method == "Raycast" and typeof(origin) == "Vector3" then
-                local direction = args[2]
-                args[2] = (target.Position - origin).Unit * direction.Magnitude
-                return oldNamecall(self, unpack(args))
-            end
-        end
-    end
-
-    return oldNamecall(self, unpack(args))
-end)
-setreadonly(mt, true)
-
---// Loop Principal (ESP y FOV)
+--// Loop Principal (Solo ESP y FOV - Tu cámara tiene libertad absoluta)
 RunService.RenderStepped:Connect(function()
     local mousePos = UserInputService:GetMouseLocation()
     fovCircle.Position = mousePos
-    fovCircle.Visible = SETTINGS.SilentAim
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer then
