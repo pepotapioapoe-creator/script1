@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB V2.31 DIAG — FRESH EDITION
+    ZVOLT HUB V2.32 POS — FRESH EDITION
     UI moderna + más funciones + mejor rendimiento
     By Zvolt
 ]]
@@ -238,13 +238,13 @@ snapLine.AnchorPoint = Vector2.new(0.5, 0.5) snapLine.BorderSizePixel = 0
 snapLine.BackgroundColor3 = Accent() snapLine.Visible = false snapLine.Parent = gui TagAccent(snapLine)
 -- Estado del aimbot en pantalla (diagnóstico en vivo, sin F9)
 local aimStatus = Instance.new("TextLabel")
-aimStatus.Size = UDim2.new(0, 340, 0, 18) aimStatus.Position = UDim2.new(0.5, -170, 1, -60)
+aimStatus.Size = UDim2.new(0, 340, 0, 18) aimStatus.Position = UDim2.new(0, 10, 0, 10)
 aimStatus.BackgroundTransparency = 1 aimStatus.Font = FONT_MAIN aimStatus.TextSize = 12
 aimStatus.TextColor3 = COLOR_SUBTEXT aimStatus.TextStrokeTransparency = 0.5
 aimStatus.Text = "" aimStatus.Parent = gui
 -- Estado silent/magic en pantalla (como el del aimbot)
 local silentStatus = Instance.new("TextLabel")
-silentStatus.Size = UDim2.new(0, 380, 0, 18) silentStatus.Position = UDim2.new(0.5, -190, 1, -40)
+silentStatus.Size = UDim2.new(0, 380, 0, 18) silentStatus.Position = UDim2.new(0, 10, 0, 30)
 silentStatus.BackgroundTransparency = 1 silentStatus.Font = FONT_MAIN silentStatus.TextSize = 11
 silentStatus.TextColor3 = COLOR_SUBTEXT silentStatus.TextStrokeTransparency = 0.5
 silentStatus.Text = "" silentStatus.Parent = gui
@@ -260,7 +260,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.31 DIAG" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.32 POS" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -303,7 +303,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.31 DIAG" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.32 POS" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -2240,8 +2240,8 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.31 DIAG", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.31 DIAG] cargado OK - telemetria silent/magic")
+notify("ZVOLT V2.32 POS", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.32 POS] cargado OK - estados arriba a la izquierda")
 if hookmetamethod == nil then
     notify("Executor limitado", "Sin hookmetamethod: Silent y SPY no funcionan aquí. Aimbot, ESP, Trigger, Hitbox y Magic sí.")
     print("[ZVOLT] executor sin hookmetamethod: silent/SPY desactivados por hardware")
