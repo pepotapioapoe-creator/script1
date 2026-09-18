@@ -494,14 +494,7 @@ end
 --// Páginas + tabs
 local pages, tabBtns = {}, {}
 local TAB_INFO = {
-    {id="combat",   icon="⚔️", title="Pelea",   desc="Apunta, pega y domina."},
-    {id="visuals",  icon="👁️", title="Ver",    desc="Ve todo antes que ellos."},
-    {id="movement", icon="🌀", title="Mover",   desc="Muévete sin límites."},
-    {id="teleport", icon="📍", title="TP",      desc="Viaja instantáneo."},
-    {id="troll",    icon="🤡", title="Fun",     desc="Modo payaso activado."},
-    {id="weapon",   icon="🔫", title="Armas",   desc="Tus armas, chetadas."},
-    {id="world",    icon="🌍", title="Mundo",   desc="Controla el mapa."},
-    {id="config",   icon="⚙️", title="Ajustes", desc="Teclas, tema y cuenta."},
+    {id="a", icon="", title="A", desc=""},
 }
 local function createPage(id)
     local p = Instance.new("ScrollingFrame")
@@ -547,7 +540,7 @@ for i, t in ipairs(TAB_INFO) do
     b.MouseLeave:Connect(function() if not pages[t.id].Visible then tween(b, TweenInfo.new(0.15), {BackgroundTransparency = 1}) end end)
     tabBtns[t.id] = b
 end
-showPage("combat", "Pelea", "Apunta, pega y domina.")
+showPage("a", "A", "")
 
 --// Componentes modernos
 local toggleStates = {}
@@ -717,178 +710,6 @@ local SILENT_PROFILES = {
 
 --// ===== CONSTRUIR PESTAÑAS =====
 -- COMBAT (Silent primero para que se vea sin hacer scroll)
-local c4 = createCard(pages["combat"], "👻 Sigilo", 200)
-local tSilent
-tSilent = createToggle(c4, "Sigilo ⚠️", function(v)
-    if v and ghostBlock() then tSilent.Set(false) return end
-    settings.silentAimEnabled = v
-    if v then tryEnableSilentAim() end
-    notify("Silent Aim", v and "Activado (usa el mismo FOV)" or "Desactivado")
-end, "silent")
-table.insert(riskyToggles, tSilent)
-createSlider(c4, "Chance %", settings.silentHitChance, 1, 100, function(v) settings.silentHitChance = v end)
-createSlider(c4, "Sigilo FOV", settings.silentFov, 40, 500, function(v) settings.silentFov = v end)
-createSlider(c4, "Prediccion", 12, 0, 50, function(v) settings.silentPrediction = v / 100 end)
-createDropdown(c4, "Hueso", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "Same as Aimbot"}, "Same as Aimbot", function(v)
-    settings.silentBone = v
-end)
-createToggle(c4, "Equipos", function(v) settings.teamCheck = v end)
-createToggle(c4, "Paredes", function(v) settings.wallCheck = v end)
-local profileNames = {}
-for k in pairs(SILENT_PROFILES) do table.insert(profileNames, k) end
-table.sort(profileNames)
-local profBtn = createDropdown(c4, "Perfil", profileNames, "Universal", function(v)
-    settings.silentGame = v
-    notify("Silent", "Perfil: " .. v)
-end)
-local gameInfoLbl = Instance.new("TextLabel")
-gameInfoLbl.Size = UDim2.new(1, 0, 0, 18) gameInfoLbl.BackgroundTransparency = 1
-gameInfoLbl.Font = FONT_MAIN gameInfoLbl.TextSize = 11 gameInfoLbl.TextColor3 = COLOR_SUBTEXT
-gameInfoLbl.TextXAlignment = Enum.TextXAlignment.Left
-gameInfoLbl.Text = "Este juego PlaceId: " .. tostring(game.PlaceId)
-gameInfoLbl.Parent = c4
-createButton(c4, "📋 Copiar datos del juego", function()
-    local s = "PlaceId: " .. tostring(game.PlaceId) .. " JobId: " .. tostring(game.JobId)
-    if setclipboard then
-        setclipboard(s)
-        notify("Silent", "Datos copiados. Pásamelos con el log del SPY.")
-    else
-        dprint("[ZVOLT-SPY] DATOS DEL JUEGO:", s)
-        notify("Silent", "Sin portapapeles: mira la consola F9.")
-    end
-end, false)
--- auto-detecta el juego por PlaceId y elige su perfil solo
-for pname, prof in pairs(SILENT_PROFILES) do
-    if prof.placeIds then
-        for _, pid in ipairs(prof.placeIds) do
-            if pid == game.PlaceId then
-                settings.silentGame = pname
-                profBtn.Text = pname
-                notify("Silent", "Juego detectado: perfil " .. pname)
-                break
-            end
-        end
-    end
-end
-local tMagic
-tMagic = createToggle(c4, "Magia ⚠️", function(v)
-    if v and ghostBlock() then tMagic.Set(false) return end
-    settings.magicBulletsEnabled = v
-    settings.magicNotified = false
-    if v then
-        -- sin silent no hay objetivo: se prende solo
-        if not settings.silentAimEnabled and toggleStates["silent"] then
-            toggleStates["silent"].Set(true)
-        end
-        notify("Magic Bullets", "Activadas + Silent auto (usan su FOV y predicción)")
-    else
-        notify("Magic Bullets", "Desactivadas")
-    end
-end)
-table.insert(riskyToggles, tMagic)
-createToggle(c4, "Ojo 🔍", function(v)
-    settings.spyEnabled = v
-    if v then tryEnableSpy() notify("Spy", "Dispara varias veces y abre la consola con F9.") end
-end)
-
-local c1 = createCard(pages["combat"], "🎯 Aim", 250)
-createToggle(c1, "Apuntar · click", function(v) settings.aimEnabled = v end, "aimbot")
-createDropdown(c1, "Hueso objetivo", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}, "Head", function(v) settings.targetPart = v end)
-createToggle(c1, "Auto", function(v) settings.aimAuto = v end)
-createToggle(c1, "Snap", function(v) settings.aimSnap = v end)
-createToggle(c1, "NPCs", function(v) settings.aimNpcs = v end)
-createToggle(c1, "Diag", function(v) settings.aimDebug = v end)
-createToggle(c1, "Sin filtro", function(v) settings.aimBrute = v end)
-local tTrigger
-tTrigger = createToggle(c1, "Disparo", function(v)
-    if v and ghostBlock() then tTrigger.Set(false) return end
-    settings.triggerbot = v
-end)
-table.insert(riskyToggles, tTrigger)
-createSlider(c1, "Retraso disparo", settings.triggerDelay, 0, 500, function(v) settings.triggerDelay = v end)
-
-local c2 = createCard(pages["combat"], "⭕ FOV & Suavizado", 190)
-createSlider(c2, "Radio FOV", settings.fovRadius, 40, 400, function(v) settings.fovRadius = v end)
-createSlider(c2, "Suavizado", settings.smoothing, 1, 100, function(v) settings.smoothing = v end)
-createSlider(c2, "Zona muerta", settings.aimDeadzone, 0, 30, function(v) settings.aimDeadzone = v end)
-createToggle(c2, "Mostrar círculo FOV", function(v) settings.showFov = v end, nil, true)
-createToggle(c2, "FOV arcoíris 🌈", function(v) settings.fovRainbow = v end)
-
-local c3 = createCard(pages["combat"], "💥 Daño & Paredes", 150)
-local tHitbox
-tHitbox = createToggle(c3, "Alcance ⚠️", function(v)
-    if v and ghostBlock() then tHitbox.Set(false) return end
-    settings.hitboxEnabled = v if not v then restoreDefaults() end
-end, "hitbox")
-table.insert(riskyToggles, tHitbox)
-createSlider(c3, "Tamaño Hit", settings.hitboxSize, 2, 25, function(v) settings.hitboxSize = v end)
-local tWallbang
-tWallbang = createToggle(c3, "WB + XR ⚠️", function(v)
-    if v and ghostBlock() then tWallbang.Set(false) return end
-    settings.wallbangEnabled = v
-end)
-table.insert(riskyToggles, tWallbang)
-
--- VISUALS
-local v1 = createCard(pages["visuals"], "👁️ Radar", 280)
-createToggle(v1, "Radar", function(v) settings.espEnabled = v end, "esp")
-createToggle(v1, "Nombres", function(v) settings.espNames = v end, nil, true)
-createToggle(v1, "Distancia [m]", function(v) settings.espDistance = v end, nil, true)
-createToggle(v1, "Barra de vida", function(v) settings.espHealthBar = v end, nil, true)
-createToggle(v1, "Caja 2D", function(v) settings.espBox = v end, nil, true)
-createToggle(v1, "Lineas", function(v) settings.espTracer = v end)
-createToggle(v1, "Aura", function(v) settings.espChams = v end, nil, true)
-createToggle(v1, "Ver herramienta en mano 🔫", function(v) settings.espTool = v end)
-createToggle(v1, "Aura XR", function(v) settings.espXray = v end, nil, true)
-
-local v2 = createCard(pages["visuals"], "🎨 Estilo", 160)
-createDropdown(v2, "Lineas", {"Bottom", "Center", "Mouse"}, "Bottom", function(v) settings.tracerOrigin = v end)
-createToggle(v2, "Radar 🌈", function(v) settings.espRainbow = v end)
-createSlider(v2, "Distancia máxima", settings.maxDistance, 100, 5000, function(v) settings.maxDistance = v end)
-
--- MOVEMENT
-local m1 = createCard(pages["movement"], "✈️ Vuelo & Clip", 150)
-local tFly
-tFly = createToggle(m1, "Vuelo ⚠️", function(v)
-    if v and ghostBlock() then tFly.Set(false) return end
-    settings.flyEnabled = v
-end, "fly")
-table.insert(riskyToggles, tFly)
-createSlider(m1, "Velocidad de vuelo", settings.flySpeed, 10, 200, function(v) settings.flySpeed = v end)
-local tNoclip
-tNoclip = createToggle(m1, "Clip", function(v)
-    if v and ghostBlock() then tNoclip.Set(false) return end
-    settings.noclipEnabled = v
-end, "noclip")
-table.insert(riskyToggles, tNoclip)
-
-local m2 = createCard(pages["movement"], "🏃 Velocidad & Salto", 240)
-local tSpeed
-tSpeed = createToggle(m2, "Rápido ⚠️", function(v)
-    if v and ghostBlock() then tSpeed.Set(false) return end
-    settings.speedEnabled = v if not v then local h = myHum() if h then h.WalkSpeed = DEFAULT_SPEED end end
-end, "speed")
-table.insert(riskyToggles, tSpeed)
-createSlider(m2, "Velocidad", settings.customSpeed, 16, 150, function(v) settings.customSpeed = v end)
-local tJump
-tJump = createToggle(m2, "Salto", function(v)
-    if v and ghostBlock() then tJump.Set(false) return end
-    settings.jumpEnabled = v if not v then local h = myHum() if h then h.JumpPower = DEFAULT_JUMP end end
-end, "jump")
-table.insert(riskyToggles, tJump)
-createSlider(m2, "Potencia", settings.customJump, 50, 350, function(v) settings.customJump = v end)
-local tBhop
-tBhop = createToggle(m2, "Hop", function(v)
-    if v and ghostBlock() then tBhop.Set(false) return end
-    settings.bhopEnabled = v
-end)
-table.insert(riskyToggles, tBhop)
-local tInfJump
-tInfJump = createToggle(m2, "Salto ♾️", function(v)
-    if v and ghostBlock() then tInfJump.Set(false) return end
-    settings.infJumpEnabled = v
-end)
-table.insert(riskyToggles, tInfJump)
 _G.ZV = _G.ZV or {}
 _G.ZV.settings = settings
 _G.ZV.gui = gui
@@ -948,4 +769,4 @@ _G.ZV.applyDiscreet = applyDiscreet
 _G.ZV.keybinds = keybinds
 _G.ZV.origLighting = origLighting
 applyDiscreet()
-print("P1 OK")
+print("MINI OK")
