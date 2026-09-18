@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB V2.38 FPS — FRESH EDITION
+    ZVOLT HUB V2.39 NOCORE — FRESH EDITION
     UI moderna + más funciones + mejor rendimiento
     By Zvolt
 ]]
@@ -240,9 +240,7 @@ local function notify(title, text)
         tween(d, TweenInfo.new(0.3), {TextTransparency = 1})
         task.wait(0.32) pcall(function() f:Destroy() end)
     end)
-    pcall(function()
-        StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = 1.2})
-    end)
+    -- NOTA: no se usa StarterGui:SetCore a propósito (rompe módulos CoreGui en algunos executors)
 end
 -- Prints solo con Log F9 activado: el anticheat puede leer la consola y banear por el texto.
 local function dprint(...)
@@ -380,7 +378,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.38 FPS" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.39 NOCORE" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -423,7 +421,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.38 FPS" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.39 NOCORE" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -2454,8 +2452,8 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.38 FPS", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-dprint("[ZVOLT V2.38 FPS] cargado OK - rendimiento optimizado")
+notify("ZVOLT V2.39 NOCORE", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+dprint("[ZVOLT V2.39 NOCORE] cargado OK - sin SetCore")
 if hookmetamethod == nil then
     notify("Executor limitado", "Sin hookmetamethod: Silent y SPY no funcionan aquí. Aimbot, ESP, Trigger, Hitbox y Magic sí.")
     dprint("[ZVOLT] executor sin hookmetamethod: silent/SPY desactivados por hardware")
