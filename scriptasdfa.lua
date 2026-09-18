@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB V2.28 SPY+ — FRESH EDITION
+    ZVOLT HUB V2.30 MAGICFIX — FRESH EDITION
     UI moderna + más funciones + mejor rendimiento
     By Zvolt
 ]]
@@ -24,7 +24,7 @@ local settings = {
     targetPart = "Head", hitboxEnabled = false, hitboxSize = 8, wallbangEnabled = false,
     silentAimEnabled = false, silentHitChance = 100, silentPrediction = 0.12,
     silentBone = "Same as Aimbot", silentFov = 200,
-    magicBulletsEnabled = false,
+    magicBulletsEnabled = false, magicNotified = false,
     spyEnabled = false,
     silentGame = "Universal",
     triggerbot = false, triggerDelay = 150, triggerWarned = false,
@@ -254,7 +254,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.28 SPY+" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.30 MAGICFIX" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -297,7 +297,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.28 SPY+" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.30 MAGICFIX" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -659,7 +659,16 @@ local tMagic
 tMagic = createToggle(c4, "Magic Bullets ⚠️", function(v)
     if v and ghostBlock() then tMagic.Set(false) return end
     settings.magicBulletsEnabled = v
-    notify("Magic Bullets", v and "Activadas (usan FOV + predicción del silent)" or "Desactivadas")
+    settings.magicNotified = false
+    if v then
+        -- sin silent no hay objetivo: se prende solo
+        if not settings.silentAimEnabled and toggleStates["silent"] then
+            toggleStates["silent"].Set(true)
+        end
+        notify("Magic Bullets", "Activadas + Silent auto (usan su FOV y predicción)")
+    else
+        notify("Magic Bullets", "Desactivadas")
+    end
 end)
 table.insert(riskyToggles, tMagic)
 createToggle(c4, "SPY del arma 🔍", function(v)
@@ -1476,7 +1485,12 @@ workspace.DescendantAdded:Connect(function(inst)
     if count >= 40 then return end
     -- hitchance una sola vez por bala: o vuela teledirigida o recta (parece legit)
     local _, tgt = getSilentHitPos()
-    trackedBullets[inst] = {t0 = tick(), target = (tgt and tgt.Parent) and tgt or nil}
+    local realTgt = (tgt and tgt.Parent) and tgt or nil
+    trackedBullets[inst] = {t0 = tick(), target = realTgt}
+    if realTgt and not settings.magicNotified then
+        settings.magicNotified = true
+        notify("Magic Bullets", "Objetivo adquirido: curvando balas.")
+    end
 end)
 RunService.Heartbeat:Connect(function()
     if not settings.magicBulletsEnabled or settings.ghostMode then return end
@@ -2170,5 +2184,9 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.28 SPY+", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.28 SPY+] cargado OK - spy ampliado en Combat")
+notify("ZVOLT V2.30 MAGICFIX", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.30 MAGICFIX] cargado OK - magic auto-silent + aviso")
+if hookmetamethod == nil then
+    notify("Executor limitado", "Sin hookmetamethod: Silent y SPY no funcionan aquí. Aimbot, ESP, Trigger, Hitbox y Magic sí.")
+    print("[ZVOLT] executor sin hookmetamethod: silent/SPY desactivados por hardware")
+end
