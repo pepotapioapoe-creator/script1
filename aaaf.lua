@@ -170,12 +170,11 @@ local function rndName()
 end
 for _, v in ipairs(localPlayer.PlayerGui:GetChildren()) do
     pcall(function()
-        if v:GetAttribute("ZV2") or v.Name:find("Zvolt") or v.Name:find("ZVOLT") then v:Destroy() end
+        if v.Name == "PlayerStatsGui" or v.Name:find("Zvolt") or v.Name:find("ZVOLT") then v:Destroy() end
     end)
 end
 local gui = Instance.new("ScreenGui")
-gui.Name = rndName()
-gui:SetAttribute("ZV2", true)
+gui.Name = "PlayerStatsGui"
 -- limpia restos de ejecuciones viejas: su GUI y su ESP pegado a personajes
 for _, pl in ipairs(Players:GetPlayers()) do
     local ch = pl.Character
@@ -769,4 +768,4 @@ _G.ZV.applyDiscreet = applyDiscreet
 _G.ZV.keybinds = keybinds
 _G.ZV.origLighting = origLighting
 applyDiscreet()
-print("MINI OK")
+print("MINI2 OK")
