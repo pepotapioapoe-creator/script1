@@ -37,8 +37,8 @@ local settings = {
     aimDeadzone = 6,
     -- visuals
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
-    espBox = true, espTracer = false, tracerOrigin = "Bottom", espChams = true, espTool = false,
-    espRainbow = false, maxDistance = 1500,
+    espBox = true, espTracer = true, tracerOrigin = "Bottom", espChams = false, espTool = false,
+    espRainbow = false, maxDistance = 1500, skeleton = true,
     espXray = true,
     -- movement
     flyEnabled = false, flySpeed = 60, noclipEnabled = false, speedEnabled = false, customSpeed = 32,
@@ -197,6 +197,9 @@ gui.Parent = localPlayer:WaitForChild("PlayerGui")
 --// Texto discreto: el anticheat escanea PlayerGui (TextLabel/TextButton).
 -- Se traduce ANTES de crear el texto (sin flash). discreetOn=true siempre.
 -- Definido ANTES de notify() a proposito (scope Lua: notify lo captura como upvalue).
+-- DISCREET_ENABLED=false: nombres reales (el usuario confirmo que "ESP" no patea).
+-- Si vuelve el kick al ejecutar, poner en true y todo vuelve a neutro solo.
+local DISCREET_ENABLED = false
 local discreetOn = true
 local labelOrig = {}
 local DMDICT = {
@@ -272,6 +275,7 @@ local function repAll(s, find, repl)
 end
 local function discreetText(s)
     s = tostring(s)
+    if not DISCREET_ENABLED then return s end
     s = s:gsub("%b()", "")
     for _, pr in ipairs(DMDICT) do s = repAll(s, pr[1], pr[2]) end
     s = s:gsub("^%s+", ""):gsub("%s+$", ""):gsub("  +", " ")
@@ -378,7 +382,7 @@ loader.Size = UDim2.new(1, 0, 1, 0) loader.BackgroundColor3 = COLOR_BG loader.Pa
 local loadTitle = Instance.new("TextLabel")
 loadTitle.Size = UDim2.new(1, 0, 0, 50) loadTitle.Position = UDim2.new(0, 0, 0.42, -40)
 loadTitle.BackgroundTransparency = 1 loadTitle.Font = FONT_TITLE loadTitle.TextSize = 42
-loadTitle.TextColor3 = Color3.fromRGB(255,255,255) loadTitle.Text = "ZV" loadTitle.Parent = loader
+loadTitle.TextColor3 = Color3.fromRGB(255,255,255) loadTitle.Text = "ZVOLT" loadTitle.Parent = loader
 local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, THEMES.Cyan.main), ColorSequenceKeypoint.new(1, THEMES.Cyan.second)} loadGrad.Parent = loadTitle
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
@@ -418,7 +422,7 @@ local logo = Instance.new("TextLabel")
 logo.Size = UDim2.new(1, -24, 0, 40) logo.Position = UDim2.new(0, 12, 0, 12)
 logo.BackgroundTransparency = 1 logo.Font = FONT_TITLE logo.TextSize = 24
 logo.TextXAlignment = Enum.TextXAlignment.Left logo.TextColor3 = Color3.fromRGB(255,255,255)
-logo.Text = "ZV" logo.Parent = side
+logo.Text = "ZVOLT" logo.Parent = side
 local logoGrad = Instance.new("UIGradient")
 logoGrad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, THEMES.Cyan.main), ColorSequenceKeypoint.new(1, THEMES.Cyan.second)}
 logoGrad.Parent = logo
@@ -461,7 +465,7 @@ local pageTitle = Instance.new("TextLabel")
 pageTitle.Size = UDim2.new(0, 250, 0, 28) pageTitle.Position = UDim2.new(0, 18, 0, 8)
 pageTitle.BackgroundTransparency = 1 pageTitle.Font = FONT_BOLD pageTitle.TextSize = 17
 pageTitle.TextXAlignment = Enum.TextXAlignment.Left pageTitle.TextColor3 = COLOR_TEXT
-pageTitle.Text = "Pelea" pageTitle.Parent = topBar
+pageTitle.Text = "Combat" pageTitle.Parent = topBar
 local pageDesc = Instance.new("TextLabel")
 pageDesc.Size = UDim2.new(0, 350, 0, 16) pageDesc.Position = UDim2.new(0, 18, 0, 34)
 pageDesc.BackgroundTransparency = 1 pageDesc.Font = FONT_MAIN pageDesc.TextSize = 11
@@ -776,10 +780,9 @@ createToggle(v1, "Nombres", function(v) settings.espNames = v end, nil, true)
 createToggle(v1, "Distancia [m]", function(v) settings.espDistance = v end, nil, true)
 createToggle(v1, "Barra de vida", function(v) settings.espHealthBar = v end, nil, true)
 createToggle(v1, "Caja 2D", function(v) settings.espBox = v end, nil, true)
-createToggle(v1, "Tracers", function(v) settings.espTracer = v end)
-createToggle(v1, "Chams", function(v) settings.espChams = v end, nil, true)
+createToggle(v1, "Tracers", function(v) settings.espTracer = v end, nil, true)
+createToggle(v1, "Esqueleto", function(v) settings.skeleton = v end, nil, true)
 createToggle(v1, "Ver herramienta en mano 🔫", function(v) settings.espTool = v end)
-createToggle(v1, "Chams X-ray", function(v) settings.espXray = v end, nil, true)
 createToggle(v1, "Team Check", function(v) settings.teamCheck = v end)
 
 local v2 = createCard(pages["visuals"], "🎨 Estilo", 160)
@@ -1255,7 +1258,7 @@ end, false)
 local floatBtn = Instance.new("TextButton")
 floatBtn.Size = UDim2.new(0, 96, 0, 44) floatBtn.Position = UDim2.new(0, 30, 0, 120)
 floatBtn.BackgroundColor3 = COLOR_CARD floatBtn.Font = FONT_TITLE floatBtn.TextSize = 14
-floatBtn.TextColor3 = Color3.fromRGB(255,255,255) floatBtn.Text = "ZV" floatBtn.Parent = gui corner(floatBtn, 12)
+floatBtn.TextColor3 = Color3.fromRGB(255,255,255) floatBtn.Text = "ZVOLT" floatBtn.Parent = gui corner(floatBtn, 12)
 local floatGrad = Instance.new("UIGradient")
 floatGrad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, THEMES.Cyan.main), ColorSequenceKeypoint.new(1, THEMES.Cyan.second)}
 floatGrad.Parent = floatBtn
@@ -1288,7 +1291,7 @@ end)
 local aimBtn = Instance.new("TextButton")
 aimBtn.Size = UDim2.new(0, 64, 0, 64) aimBtn.Position = UDim2.new(1, -90, 0.5, -32)
 aimBtn.BackgroundColor3 = COLOR_CARD aimBtn.Font = FONT_BOLD aimBtn.TextSize = 13
-aimBtn.TextColor3 = Accent() aimBtn.Text = "ASIS" aimBtn.Visible = false aimBtn.Parent = gui
+aimBtn.TextColor3 = Accent() aimBtn.Text = "AIM" aimBtn.Visible = false aimBtn.Parent = gui
 corner(aimBtn, 999) stroke(aimBtn, Accent(), 2) TagAccent(aimBtn:FindFirstChildOfClass("UIStroke"), "Color")
 local aimingMobile = false
 -- Botones táctiles para subir/bajar volando
@@ -1372,6 +1375,7 @@ local function clearESP(plr)
     local o = espData[plr]
     if o then
         safeDestroy(o.hl) safeDestroy(o.bb) safeDestroy(o.line) safeDestroy(o.box)
+        if o.sk then for _, f in ipairs(o.sk) do safeDestroy(f) end end
         espData[plr] = nil
     end
     -- no tocamos espCharOf aquí a propósito en el loop por frame;
@@ -1381,17 +1385,43 @@ local function espColor()
     if settings.espRainbow then return Color3.fromHSV(tick() % 5 / 5, 1, 1) end
     return Accent()
 end
+--// ESP esqueleto sutil (R15 + fallback R6). Sin Highlight (muy fogoso).
+local SK_R15 = {
+    {"Head","UpperTorso"},{"UpperTorso","LowerTorso"},
+    {"UpperTorso","UpperArmLeft"},{"UpperArmLeft","LowerArmLeft"},{"LowerArmLeft","HandLeft"},
+    {"UpperTorso","UpperArmRight"},{"UpperArmRight","LowerArmRight"},{"LowerArmRight","HandRight"},
+    {"LowerTorso","UpperLegLeft"},{"UpperLegLeft","LowerLegLeft"},{"LowerLegLeft","FootLeft"},
+    {"LowerTorso","UpperLegRight"},{"UpperLegRight","LowerLegRight"},{"LowerLegRight","FootRight"},
+}
+local SK_R6 = {
+    {"Head","Torso"},{"Torso","Left Arm"},{"Torso","Right Arm"},{"Torso","Left Leg"},{"Torso","Right Leg"},
+}
+local function skSeg(objs, i)
+    local f = objs.sk[i]
+    if not f then
+        f = Instance.new("Frame")
+        f.AnchorPoint = Vector2.new(0.5, 0.5) f.BorderSizePixel = 0
+        f.BackgroundColor3 = Accent() f.Visible = false f.Parent = gui
+        objs.sk[i] = f
+    end
+    return f
+end
+local function drawSeg(f, ax, ay, bx, by, col)
+    local dx, dy = bx - ax, by - ay
+    local len = math.sqrt(dx * dx + dy * dy)
+    if len < 1 then f.Visible = false return end
+    f.Size = UDim2.new(0, 1.5, 0, len)
+    f.Position = UDim2.new(0, (ax + bx) / 2, 0, (ay + by) / 2)
+    f.Rotation = math.deg(math.atan2(dy, dx)) - 90
+    f.BackgroundColor3 = col f.Visible = true
+end
+local function hideSk(objs)
+    if objs.sk then for _, f in ipairs(objs.sk) do f.Visible = false end end
+end
 local function buildESP(plr, char)
     clearESP(plr)
     local objs = {}
-    if settings.espChams then
-        local hl = Instance.new("Highlight")
-        hl.Adornee = char hl.FillTransparency = 0.7 hl.OutlineTransparency = 0
-        hl.FillColor = espColor() hl.OutlineColor = espColor()
-        hl.DepthMode = (settings.espXray ~= false) and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
-        hl:SetAttribute("ZV2", true)
-        hl.Parent = char objs.hl = hl
-    end
+    objs.sk = {}
     local bb = Instance.new("BillboardGui")
     bb.Size = UDim2.new(0, 170, 0, 46) bb.StudsOffset = UDim2.new(0, 2.8, 0) bb.AlwaysOnTop = true
     bb:SetAttribute("ZV2", true)
@@ -1426,11 +1456,10 @@ local function updateESP(plr)
     local hum = char:FindFirstChildOfClass("Humanoid")
     local lr = myRoot()
     if not lr then return end
-    if not hum and not settings.aimBrute then return end
     local dist = math.floor((lr.Position - root.Position).Magnitude)
     if dist > settings.maxDistance or (hum and hum.Health <= 0) then
         objs.bb.Enabled = false objs.line.Visible = false objs.box.Visible = false
-        if objs.hl then objs.hl.Enabled = false end
+        hideSk(objs)
         return
     end
     local col = espColor()
@@ -1439,10 +1468,6 @@ local function updateESP(plr)
         col = Color3.fromRGB(90, 255, 130)
     end
     objs.bb.Enabled = true
-    if objs.hl then
-        objs.hl.Enabled = true
-        objs.hl.DepthMode = (settings.espXray ~= false) and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
-    end
     -- nombre + dist
     local txt = ""
     if settings.espNames then txt = plr.DisplayName .. " " end
@@ -1463,8 +1488,7 @@ local function updateESP(plr)
         objs.tool.Visible = t ~= nil
         if t then objs.tool.Text = "🔫 " .. t.Name end
     else objs.tool.Visible = false end
-    if objs.hl then objs.hl.FillColor = col end
-    -- tracer
+    -- tracer sutil
     if settings.espTracer then
         local sp, on = camera:WorldToViewportPoint(root.Position)
         if on then
@@ -1474,25 +1498,51 @@ local function updateESP(plr)
             else startV = UserInputService:GetMouseLocation() end
             local endV = Vector2.new(sp.X, sp.Y)
             local d = (endV - startV).Magnitude
-            objs.line.Size = UDim2.new(0, 1.5, 0, d)
+            objs.line.Size = UDim2.new(0, 1.25, 0, d)
             objs.line.Position = UDim2.new(0, (startV.X + endV.X) / 2, 0, (startV.Y + endV.Y) / 2)
             objs.line.Rotation = math.deg(math.atan2(endV.Y - startV.Y, endV.X - startV.X)) - 90
             objs.line.BackgroundColor3 = col objs.line.Visible = true
         else objs.line.Visible = false end
     else objs.line.Visible = false end
-    -- box
+    -- box 2D (con fallback si no hay Head)
     if settings.espBox then
         local head = char:FindFirstChild("Head")
         local _, on = camera:WorldToViewportPoint(root.Position)
-        if on and head then
-            local hp = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.6, 0))
-            local lp = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
+        if on then
+            local top3d = head and (head.Position + Vector3.new(0, 0.6, 0)) or (root.Position + Vector3.new(0, 2.5, 0))
+            local bot3d = root.Position - Vector3.new(0, 3, 0)
+            local hp = camera:WorldToViewportPoint(top3d)
+            local lp = camera:WorldToViewportPoint(bot3d)
             local h = math.abs(hp.Y - lp.Y) local w = h * 0.62
-            objs.box.Size = UDim2.new(0, w, 0, h)
-            objs.box.Position = UDim2.new(0, hp.X - w / 2, 0, hp.Y)
-            objs.box.Visible = true objs.boxStroke.Color = col
+            if h > 4 then
+                objs.box.Size = UDim2.new(0, w, 0, h)
+                objs.box.Position = UDim2.new(0, hp.X - w / 2, 0, hp.Y)
+                objs.box.Visible = true objs.boxStroke.Color = col
+            else objs.box.Visible = false end
         else objs.box.Visible = false end
     else objs.box.Visible = false end
+    -- esqueleto sutil
+    if settings.skeleton then
+        local pm = {}
+        for _, c in ipairs(char:GetChildren()) do
+            if c:IsA("BasePart") then pm[c.Name] = c end
+        end
+        local list = pm["UpperTorso"] and SK_R15 or SK_R6
+        local si = 0
+        for _, s in ipairs(list) do
+            local a, b = pm[s[1]], pm[s[2]]
+            si = si + 1
+            local f = skSeg(objs, si)
+            if a and b then
+                local sa, ona = camera:WorldToViewportPoint(a.Position)
+                local sb, onb = camera:WorldToViewportPoint(b.Position)
+                if ona and onb then
+                    drawSeg(f, sa.X, sa.Y, sb.X, sb.Y, col)
+                else f.Visible = false end
+            else f.Visible = false end
+        end
+        for i = si + 1, #objs.sk do objs.sk[i].Visible = false end
+    else hideSk(objs) end
 end
 Players.PlayerRemoving:Connect(function(plr) if not dead then clearESP(plr) espCharOf[plr] = nil end end)
 
@@ -2061,5 +2111,6 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZV v2.43", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+notify("ZVOLT V2.43", "Cargado. Usa cuenta alt. RightShift = ocultar.")
 dprint("[sys] cargado OK")
+
