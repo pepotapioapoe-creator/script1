@@ -1429,7 +1429,7 @@ local function buildESP(plr, char)
     local objs = {}
     objs.sk = {}
     local bb = Instance.new("BillboardGui")
-    bb.Size = UDim2.new(0, 170, 0, 46) bb.StudsOffset = UDim2.new(0, 2.8, 0) bb.AlwaysOnTop = true
+    bb.Size = UDim2.new(0, 170, 0, 46) bb.StudsOffset = Vector3.new(0, 2.8, 0) bb.AlwaysOnTop = true
     bb:SetAttribute("ZV2", true)
     bb.Adornee = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
     bb.Parent = char
