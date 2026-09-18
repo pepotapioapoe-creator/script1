@@ -1674,6 +1674,7 @@ local aimDeepLast = 0
 -- (lastAimPart vive arriba junto a orbitAngle; magic, V1 y reapply usan la misma variable)
 local espFrame, noclipLast, fbLastRefresh = 0, 0, 0 -- acumuladores de rendimiento
 local espDiagLast = 0 -- throttle del diagnóstico ESP en pantalla
+local espErr = nil -- último error de updateESP (el pcall lo tragaba en silencio)
 RunService.RenderStepped:Connect(function(dt)
     if dead then return end
     -- La cámara puede ser REEMPLAZADA por el juego (rondas/respawns). Si usamos la vieja,
@@ -1703,12 +1704,20 @@ RunService.RenderStepped:Connect(function(dt)
     espFrame = espFrame + 1
     if settings.espEnabled then
         for i, p in ipairs(Players:GetPlayers()) do
-            if p ~= localPlayer and (i + espFrame) % 2 == 0 then pcall(updateESP, p) end
+            if p ~= localPlayer and (i + espFrame) % 2 == 0 then
+                local okE, errE = pcall(updateESP, p)
+                if not okE and not espErr then espErr = errE end
+            end
         end
         -- diagnóstico en vivo: embudo del ESP (jugadores -> con root -> cerca)
         local nowE = tick()
         if nowE - espDiagLast > 0.5 then
             espDiagLast = nowE
+            if espErr then
+                espStatus.Text = "ESP err: " .. tostring(espErr):sub(1, 90)
+                espStatus.TextColor3 = Color3.fromRGB(255, 110, 120)
+                espErr = nil
+            else
             local eTot, eRoot, eNear = 0, 0, 0
             local lrE = myRoot()
             for _, p in ipairs(Players:GetPlayers()) do
@@ -1726,6 +1735,7 @@ RunService.RenderStepped:Connect(function(dt)
             end
             espStatus.Text = string.format("ESP: %d cerca (%d con root de %d juga)", eNear, eRoot, eTot)
             espStatus.TextColor3 = (eNear > 0) and Color3.fromRGB(80, 255, 130) or Color3.fromRGB(255, 200, 80)
+            end
         end
     else
         espStatus.Text = ""
