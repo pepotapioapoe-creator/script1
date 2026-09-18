@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB V2.30 MAGICFIX — FRESH EDITION
+    ZVOLT HUB V2.31 DIAG — FRESH EDITION
     UI moderna + más funciones + mejor rendimiento
     By Zvolt
 ]]
@@ -242,6 +242,12 @@ aimStatus.Size = UDim2.new(0, 340, 0, 18) aimStatus.Position = UDim2.new(0.5, -1
 aimStatus.BackgroundTransparency = 1 aimStatus.Font = FONT_MAIN aimStatus.TextSize = 12
 aimStatus.TextColor3 = COLOR_SUBTEXT aimStatus.TextStrokeTransparency = 0.5
 aimStatus.Text = "" aimStatus.Parent = gui
+-- Estado silent/magic en pantalla (como el del aimbot)
+local silentStatus = Instance.new("TextLabel")
+silentStatus.Size = UDim2.new(0, 380, 0, 18) silentStatus.Position = UDim2.new(0.5, -190, 1, -40)
+silentStatus.BackgroundTransparency = 1 silentStatus.Font = FONT_MAIN silentStatus.TextSize = 11
+silentStatus.TextColor3 = COLOR_SUBTEXT silentStatus.TextStrokeTransparency = 0.5
+silentStatus.Text = "" silentStatus.Parent = gui
 
 --// Pantalla de carga
 local loader = Instance.new("Frame")
@@ -254,7 +260,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.30 MAGICFIX" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.31 DIAG" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -297,7 +303,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.30 MAGICFIX" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.31 DIAG" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -1420,6 +1426,9 @@ settings.silentBone = settings.silentBone or "Same as Aimbot"
 local silentHooked = false
 local silentBypass = false -- en true = son nuestros propios raycasts (wallcheck), no redirigir
 local silentFlash = 0 -- feedback visual: el FOV parpadea cuando el silent redirige un tiro
+local silentRedirects = 0 -- telemetría: tiros redirigidos en total
+local silentLastTarget = nil -- último objetivo adquirido
+local diagLast, diagF9Last = 0, 0 -- throttles del panel y del F9
 local function silentBoneName()
     if not settings.silentBone or settings.silentBone == "Same as Aimbot" then
         return settings.targetPart
@@ -1460,6 +1469,11 @@ local function getSilentHitPos()
         local pred = settings.silentPrediction or 0.12
         local vel = bestPart.Velocity
         if vel.Magnitude > 60 then vel = vel.Unit * 60 end -- anti-fling loco
+        pcall(function()
+            local m = bestPart:FindFirstAncestorOfClass("Model")
+            local pl = m and Players:GetPlayerFromCharacter(m)
+            silentLastTarget = pl and pl.DisplayName or (m and m.Name) or "?"
+        end)
         return bestPart.Position + (vel * pred), bestPart
     end
     return nil
@@ -1467,6 +1481,7 @@ end
 --// MAGIC BULLETS: tus proyectiles doblan su vuelo hacia el objetivo (respeta FOV, equipo, hitchance).
 -- Detecta piezas que NACEN cerca tuyo, en movimiento y alejándose (tus balas), e ignora el resto.
 local trackedBullets = {}
+local magicAcquired = 0 -- telemetría: balas con objetivo asignado
 workspace.DescendantAdded:Connect(function(inst)
     if not settings.magicBulletsEnabled or settings.ghostMode then return end
     if not inst or not inst:IsA("BasePart") then return end
@@ -1487,6 +1502,7 @@ workspace.DescendantAdded:Connect(function(inst)
     local _, tgt = getSilentHitPos()
     local realTgt = (tgt and tgt.Parent) and tgt or nil
     trackedBullets[inst] = {t0 = tick(), target = realTgt}
+    if realTgt then magicAcquired = magicAcquired + 1 end
     if realTgt and not settings.magicNotified then
         settings.magicNotified = true
         notify("Magic Bullets", "Objetivo adquirido: curvando balas.")
@@ -1613,6 +1629,7 @@ function tryEnableSilentAim()
                                 local nargs = {origin, ndir.Unit * dir.Magnitude}
                                 for i = 3, n do nargs[i] = args[i] end
                                 silentFlash = 0.2
+                                silentRedirects = silentRedirects + 1
                                 return oldNC(self, table.unpack(nargs, 1, math.max(n, 2)))
                             end
                         end
@@ -1628,6 +1645,7 @@ function tryEnableSilentAim()
                                 local nargs = {newRay}
                                 for i = 2, n do nargs[i] = args[i] end
                                 silentFlash = 0.2
+                                silentRedirects = silentRedirects + 1
                                 return oldNC(self, table.unpack(nargs, 1, math.max(n, 1)))
                             end
                         end
@@ -1659,6 +1677,7 @@ function tryEnableSilentAim()
                                     end
                                     if ch then
                                         silentFlash = 0.2
+                                        silentRedirects = silentRedirects + 1
                                         return oldNC(self, table.unpack(nargs, 1, n))
                                     end
                                 end
@@ -1704,6 +1723,7 @@ function tryEnableSilentAim()
                             end
                             if changed then
                                 silentFlash = 0.2
+                                silentRedirects = silentRedirects + 1
                                 return oldNC(self, table.unpack(nargs, 1, n))
                             end
                         end
@@ -1721,6 +1741,8 @@ function tryEnableSilentAim()
                 if not exploitCall then
                     local hitPos, part = getSilentHitPos()
                     if hitPos then
+                        silentFlash = 0.2
+                        silentRedirects = silentRedirects + 1
                         if k == "Hit" then return CFrame.new(hitPos) end
                         if k == "Target" then return part end
                     end
@@ -1928,6 +1950,40 @@ RunService.RenderStepped:Connect(function(dt)
                             end
                         end
                     end
+                end
+            end
+        end
+    end
+    -- Telemetría silent/magic en pantalla + F9 (para diagnosticar qué no redirige)
+    do
+        local showS = settings.silentAimEnabled or settings.magicBulletsEnabled
+        if not showS then
+            silentStatus.Text = ""
+        else
+            local nowD = tick()
+            if nowD - diagLast > 0.25 then
+                diagLast = nowD
+                local tracked = 0
+                for _ in pairs(trackedBullets) do tracked = tracked + 1 end
+                local t = "HOOKS:" .. ((hookmetamethod ~= nil) and "OK" or "FALTA")
+                if settings.silentAimEnabled then
+                    t = t .. " | SILENT:" .. (silentLastTarget or "sin objetivo")
+                        .. " hits:" .. tostring(silentRedirects)
+                end
+                if settings.magicBulletsEnabled then
+                    t = t .. " | MAGIC: rastreadas:" .. tracked .. " dirigidas:" .. magicAcquired
+                end
+                silentStatus.Text = t
+                if nowD - diagF9Last > 4 then
+                    diagF9Last = nowD
+                    print(string.format(
+                        "[ZVOLT-DIAG] hooks=%s silent=%s target=%s redirects=%d magic_tracked=%d magic_acquired=%d fov=%d/%d hitchance=%d perfil=%s",
+                        (hookmetamethod ~= nil) and "OK" or "FALTA",
+                        tostring(settings.silentAimEnabled),
+                        tostring(silentLastTarget or "-"),
+                        silentRedirects, tracked, magicAcquired,
+                        settings.fovRadius, settings.silentFov,
+                        settings.silentHitChance, tostring(settings.silentGame)))
                 end
             end
         end
@@ -2184,8 +2240,8 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.30 MAGICFIX", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.30 MAGICFIX] cargado OK - magic auto-silent + aviso")
+notify("ZVOLT V2.31 DIAG", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.31 DIAG] cargado OK - telemetria silent/magic")
 if hookmetamethod == nil then
     notify("Executor limitado", "Sin hookmetamethod: Silent y SPY no funcionan aquí. Aimbot, ESP, Trigger, Hitbox y Magic sí.")
     print("[ZVOLT] executor sin hookmetamethod: silent/SPY desactivados por hardware")
