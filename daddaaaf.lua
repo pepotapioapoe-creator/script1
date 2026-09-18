@@ -792,15 +792,15 @@ createToggle(c4, "Ojo 🔍", function(v)
 end)
 
 local c1 = createCard(pages["combat"], "🎯 Aim", 250)
-createToggle(c1, "Aim · click", function(v) settings.aimEnabled = v end, "aimbot")
+createToggle(c1, "Apuntar · click", function(v) settings.aimEnabled = v end, "aimbot")
 createDropdown(c1, "Hueso objetivo", {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}, "Head", function(v) settings.targetPart = v end)
 createToggle(c1, "Auto", function(v) settings.aimAuto = v end)
 createToggle(c1, "Snap", function(v) settings.aimSnap = v end)
 createToggle(c1, "NPCs", function(v) settings.aimNpcs = v end)
 createToggle(c1, "Diag", function(v) settings.aimDebug = v end)
-createToggle(c1, "Bruta", function(v) settings.aimBrute = v end)
+createToggle(c1, "Sin filtro", function(v) settings.aimBrute = v end)
 local tTrigger
-tTrigger = createToggle(c1, "Auto-tiro", function(v)
+tTrigger = createToggle(c1, "Disparo", function(v)
     if v and ghostBlock() then tTrigger.Set(false) return end
     settings.triggerbot = v
 end)
@@ -816,7 +816,7 @@ createToggle(c2, "FOV arcoíris 🌈", function(v) settings.fovRainbow = v end)
 
 local c3 = createCard(pages["combat"], "💥 Daño & Paredes", 150)
 local tHitbox
-tHitbox = createToggle(c3, "Hit Extender ⚠️", function(v)
+tHitbox = createToggle(c3, "Alcance ⚠️", function(v)
     if v and ghostBlock() then tHitbox.Set(false) return end
     settings.hitboxEnabled = v if not v then restoreDefaults() end
 end, "hitbox")
@@ -864,7 +864,7 @@ table.insert(riskyToggles, tNoclip)
 
 local m2 = createCard(pages["movement"], "🏃 Velocidad & Salto", 240)
 local tSpeed
-tSpeed = createToggle(m2, "Speed ⚠️", function(v)
+tSpeed = createToggle(m2, "Rápido ⚠️", function(v)
     if v and ghostBlock() then tSpeed.Set(false) return end
     settings.speedEnabled = v if not v then local h = myHum() if h then h.WalkSpeed = DEFAULT_SPEED end end
 end, "speed")
