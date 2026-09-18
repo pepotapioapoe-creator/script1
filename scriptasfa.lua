@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB V2.36 NOLEAK — FRESH EDITION
+    ZVOLT HUB V2.38 FPS — FRESH EDITION
     UI moderna + más funciones + mejor rendimiento
     By Zvolt
 ]]
@@ -251,6 +251,99 @@ local function dprint(...)
     end
 end
 
+--// Nombres discretos: el anticheat puede leer los textos de tu PlayerGui.
+-- Cambia palabras sensibles por neutras. Prendido desde la construcción (si patean
+-- al ejecutar, un interruptor interno no serviría). "Nombres reales" lo revierte.
+local discreetOn = true
+local labelOrig = {}
+local DMDICT = {
+    {"SILENT AIM", "SIL"}, {"Silent Aim", "Silent"},
+    {"MAGIC BULLETS", "MAGIC"}, {"Magic Bullets", "Magic"},
+    {"TRIGGERBOT", "TRIGGER"}, {"Triggerbot", "Trigger"},
+    {"Aimbot", "Aim"}, {"AIMBOT", "AIM"},
+    {"Wallbang", "WB"}, {"WALLBANG", "WB"},
+    {"Hitbox", "Hit"}, {"HITBOX", "HIT"},
+    {"Spinbot", "Spin"}, {"SPINBOT", "SPIN"},
+    {"Bunny Hop", "Hop"},
+    {"Noclip", "Clip"}, {"NOCLIP", "CLIP"},
+    {"Freecam", "Cam"}, {"FREECAM", "CAM"},
+    {"Jerk anti-aim", "Jerk"},
+    {"Tracker", "Track"}, {"tracker", "track"},
+    {"Rapid Fire", "Rapid"}, {"RAPID FIRE", "RAPID"},
+    {"Munición infinita", "Municion"}, {"MUNICIÓN INFINITA", "MUNICION"},
+    {"Fullbright", "Brillo"}, {"FULLBRIGHT", "BRILLO"},
+    {"Anti-AFK", "AntiAFK"}, {"Anti-Void", "AntiVoid"},
+    {"Super Jump", "Salto"}, {"SUPER JUMP", "SALTO"},
+    {"Custom Speed", "Speed"}, {"CUSTOM SPEED", "SPEED"},
+    {"Salto infinito", "SaltoInf"},
+    {"Ctrl + Click", "Click"},
+    {"Fling", "Push"},
+    {"Espectar", "Ver"},
+    {"Spectate", "Spec"},
+    {"Server Hop", "Servidor"},
+    {"Hueso silent", "Hueso"},
+    {"MODO FANTASMA", "FANTASMA"},
+    {"Modo AUTO", "Auto"},
+    {"SNAP directo", "SNAP"},
+    {"Fuerza bruta", "Bruta"},
+    {"Diagnóstico F9", "Diag"},
+    {"Incluir NPCs/bots", "NPCs"},
+    {"Forzar cámara", "Forzar"},
+    {"Team Check", "Equipos"},
+    {"Wall Check", "Paredes"},
+    {"Chams", "Aura"}, {"CHAMS", "AURA"},
+    {"Tracers", "Linea"},
+    {"Silent", "Sigilo"}, {"SILENT", "SIGILO"},
+    {"Troll", "Fun"}, {"TROLL", "FUN"},
+    {"Weapon", "Armas"}, {"WEAPON", "ARMAS"},
+    {"Combat", "Pelea"}, {"COMBAT", "PELEA"},
+    {"Visuals", "Ver"}, {"VISUALS", "VER"},
+    {"Movement", "Mover"}, {"MOVEMENT", "MOVER"},
+    {"Teleport", "TP"}, {"TELEPORT", "TP"},
+    {"World", "Mundo"}, {"WORLD", "MUNDO"},
+    {"Config", "Ajustes"}, {"CONFIG", "AJUSTES"},
+    {"Keybinds", "Teclas"}, {"KEYBINDS", "TECLAS"},
+    {"ESP", "Radar"},
+    {"Fly", "Vuelo"}, {"FLY", "VUELO"},
+    {"FPS BOOST", "FPS"},
+    {"hook detectable", "discreto"},
+    {"X-ray", "XR"},
+    {"ZVOLT", "ZV"},
+    {"AIM: ", "● "}, {"SILENT:", "●"}, {"MAGIC:", "●"}, {"HOOKS:", "●"},
+    {"LOCK ", ""},
+}
+local function repAll(s, find, repl)
+    local out, i, n = {}, 1, #find
+    while true do
+        local a, b = s:find(find, i, true)
+        if not a then out[#out + 1] = s:sub(i) break end
+        out[#out + 1] = s:sub(i, a - 1)
+        out[#out + 1] = repl
+        i = b + 1
+    end
+    return table.concat(out)
+end
+local function discreetText(s)
+    s = tostring(s)
+    s = s:gsub("%b()", "")
+    for _, pr in ipairs(DMDICT) do s = repAll(s, pr[1], pr[2]) end
+    s = s:gsub("^%s+", ""):gsub("%s+$", ""):gsub("  +", " ")
+    return s
+end
+local function applyDiscreet()
+    for _, d in ipairs(gui:GetDescendants()) do
+        if d:IsA("TextLabel") or d:IsA("TextButton") then
+            if labelOrig[d] == nil then labelOrig[d] = d.Text end
+            if discreetOn then
+                local ok, nt = pcall(discreetText, labelOrig[d])
+                if ok and nt ~= "" then d.Text = nt end
+            else
+                d.Text = labelOrig[d]
+            end
+        end
+    end
+end
+
 --// FOV + mira
 local fovFrame = Instance.new("Frame")
 fovFrame.Name = "Fov" fovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -287,7 +380,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.36 NOLEAK" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.38 FPS" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -330,7 +423,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.36 NOLEAK" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.38 FPS" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -562,7 +655,7 @@ local function createSlider(parent, titlePrefix, defaultVal, minVal, maxVal, cal
         local c = math.clamp((xPos - bp) / bs, 0, 1)
         local val = math.floor(minVal + c * (maxVal - minVal))
         fill.Size = UDim2.new(c, 0, 1, 0) knob.Position = UDim2.new(c, 0, 0.5, 0)
-        label.Text = titlePrefix .. ":" valBadge.Text = tostring(val)
+        label.Text = discreetText(titlePrefix) .. ":" valBadge.Text = tostring(val)
         pcall(callback, val)
     end
     bar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = true apply(i.Position.X) end end)
@@ -607,7 +700,7 @@ local function createDropdown(parent, title, list, default, callback)
     pcall(callback, list[idx])
     b.MouseButton1Click:Connect(function()
         idx = idx + 1 if idx > #list then idx = 1 end
-        b.Text = list[idx] pcall(callback, list[idx])
+        b.Text = discreetText(list[idx]) pcall(callback, list[idx])
     end)
     return b
 end
@@ -753,7 +846,7 @@ createToggle(v1, "ESP Players", function(v) settings.espEnabled = v end, "esp")
 createToggle(v1, "Nombres", function(v) settings.espNames = v end, nil, true)
 createToggle(v1, "Distancia [m]", function(v) settings.espDistance = v end, nil, true)
 createToggle(v1, "Barra de vida", function(v) settings.espHealthBar = v end, nil, true)
-createToggle(v1, "Caja 2D (Box)", function(v) settings.espBox = v end, nil, true)
+createToggle(v1, "Caja 2D", function(v) settings.espBox = v end, nil, true)
 createToggle(v1, "Tracers / Líneas", function(v) settings.espTracer = v end)
 createToggle(v1, "Chams (resaltado)", function(v) settings.espChams = v end, nil, true)
 createToggle(v1, "Ver herramienta en mano 🔫", function(v) settings.espTool = v end)
@@ -1060,7 +1153,15 @@ end, false)
 
 -- WORLD
 local wo1 = createCard(pages["world"], "🌍 Iluminación & Mapa", 190)
-createToggle(wo1, "Fullbright 💡", function(v) settings.fullbright = v end)
+createToggle(wo1, "Fullbright 💡", function(v)
+    settings.fullbright = v
+    if v then
+        Lighting.Brightness = 2 Lighting.ClockTime = 14 Lighting.FogEnd = 100000
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255) Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    else
+        restoreLighting()
+    end
+end)
 createButton(wo1, "☀️ Poner de día", function()
     Lighting.ClockTime = 14 Lighting.FogEnd = 100000 Lighting.Brightness = 2 Lighting.Ambient = Color3.fromRGB(255,255,255)
 end, false)
@@ -1122,6 +1223,11 @@ createToggle(cfGhost, "Log F9 (solo diagnóstico)", function(v)
         print("[sys] verbose ON")
     end
 end)
+createToggle(cfGhost, "Nombres discretos", function(v)
+    discreetOn = v
+    applyDiscreet()
+    if not v then notify("Nombres", "Reales. Ojo: si patean al ejecutar, vuelve a discretos.") end
+end, nil, true)
 local cf1 = createCard(pages["config"], "🎨 Tema", 150)
 local themeRow = Instance.new("Frame") themeRow.Size = UDim2.new(1, 0, 0, 32) themeRow.BackgroundTransparency = 1 themeRow.Parent = cf1
 local themeLay = Instance.new("UIListLayout") themeLay.FillDirection = Enum.FillDirection.Horizontal themeLay.Padding = UDim.new(0, 8) themeLay.Parent = themeRow
@@ -1270,6 +1376,8 @@ local flyUpBtn = flyTouchBtn("▲", UDim2.new(1, -164, 0.5, -70))
 local flyDownBtn = flyTouchBtn("▼", UDim2.new(1, -164, 0.5, 0))
 aimBtn.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then aimingMobile = true aimBtn.BackgroundColor3 = Accent() aimBtn.TextColor3 = Color3.fromRGB(0,0,0) end end)
 aimBtn.InputEnded:Connect(function(i) aimingMobile = false aimBtn.BackgroundColor3 = COLOR_CARD aimBtn.TextColor3 = Accent() end)
+
+applyDiscreet()
 
 --// Inputs globales
 local aimingPC = false
@@ -1891,6 +1999,7 @@ end)
 local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local aimDeepLast = 0
 local lastAimPart = nil -- último objetivo: se re-aplica post-cámara aunque el juego la pise
+local espFrame, noclipLast, fbLastRefresh = 0, 0, 0 -- acumuladores de rendimiento
 RunService.RenderStepped:Connect(function(dt)
     if dead then return end
     -- La cámara puede ser REEMPLAZADA por el juego (rondas/respawns). Si usamos la vieja,
@@ -1898,6 +2007,8 @@ RunService.RenderStepped:Connect(function(dt)
     local freshCam = workspace.CurrentCamera
     if freshCam then camera = freshCam end
     if not camera then return end
+    -- red de seguridad: cualquier error aquí saldría a consola con "loadstring" (baneable)
+    local okLoop, errLoop = pcall(function()
     -- FOV UI
     local ml = aimRefPoint()
     local wantFov = (settings.aimEnabled or settings.silentAimEnabled) and settings.showFov
@@ -1918,9 +2029,12 @@ RunService.RenderStepped:Connect(function(dt)
         -- el círculo se engrosa un instante cuando el silent redirige un tiro (confirmación visual)
         fovStroke.Thickness = (silentFlash > 0) and 3.5 or 1.6
     end
-    -- ESP (con pcall por jugador: si un personaje raro falla, no arrastra al aimbot)
+    -- ESP intercalado: mitad de jugadores por frame (se ve igual, cuesta la mitad)
+    espFrame = espFrame + 1
     if settings.espEnabled then
-        for _, p in ipairs(Players:GetPlayers()) do if p ~= localPlayer then pcall(updateESP, p) end end
+        for i, p in ipairs(Players:GetPlayers()) do
+            if p ~= localPlayer and (i + espFrame) % 2 == 0 then pcall(updateESP, p) end
+        end
     else
         for p, _ in pairs(espData) do clearESP(p) end
     end
@@ -1931,7 +2045,7 @@ RunService.RenderStepped:Connect(function(dt)
         if not settings.aimEnabled then
             aimStatus.Text = ""
         elseif not trigV1 then
-            aimStatus.Text = "AIM: ON - mantén click derecho"
+            aimStatus.Text = discreetText("AIM: ON - mantén click derecho")
             aimStatus.TextColor3 = COLOR_SUBTEXT
         else
             local ml2 = UserInputService:GetMouseLocation()
@@ -1985,7 +2099,7 @@ RunService.RenderStepped:Connect(function(dt)
                 end
             end
             if bestPartV1 then
-                aimStatus.Text = "AIM: LOCK " .. tostring(bestNameV1)
+                aimStatus.Text = discreetText("AIM: LOCK " .. tostring(bestNameV1))
                 aimStatus.TextColor3 = Color3.fromRGB(80, 255, 130)
                 lastAimPart = bestPartV1
                 -- zona muerta: si ya estás encima del objetivo no toca la cámara (tu mouse manda)
@@ -1997,8 +2111,8 @@ RunService.RenderStepped:Connect(function(dt)
                     end)
                 end
             else
-                aimStatus.Text = string.format("AIM: 0 FOV (vivos:%d bots:%d partes:%d pant:%d)",
-                    cAlive, cBots, cPart, cScreen)
+                aimStatus.Text = discreetText(string.format("AIM: 0 FOV (vivos:%d bots:%d partes:%d pant:%d)",
+                    cAlive, cBots, cPart, cScreen))
                 aimStatus.TextColor3 = Color3.fromRGB(255, 200, 80)
                 lastAimPart = nil
                 if settings.aimDebug then
@@ -2061,7 +2175,7 @@ RunService.RenderStepped:Connect(function(dt)
                 if settings.magicBulletsEnabled then
                     t = t .. " | MAGIC: rastreadas:" .. tracked .. " dirigidas:" .. magicAcquired
                 end
-                silentStatus.Text = t
+                silentStatus.Text = discreetText(t)
                 if nowD - diagF9Last > 4 then
                     diagF9Last = nowD
                     dprint(string.format(
@@ -2133,8 +2247,9 @@ RunService.RenderStepped:Connect(function(dt)
         r.Velocity = Vector3.zero
         r.RotVelocity = Vector3.zero
     end
-    -- noclip (solo escribe si hace falta: menos escrituras = menos huellas)
-    if settings.noclipEnabled and localPlayer.Character then
+    -- noclip a 10Hz (listar piezas cada frame es caro) + solo escribe si hace falta
+    if settings.noclipEnabled and localPlayer.Character and tick() - noclipLast > 0.1 then
+        noclipLast = tick()
         for _, part in ipairs(localPlayer.Character:GetDescendants()) do
             if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
         end
@@ -2150,15 +2265,13 @@ RunService.RenderStepped:Connect(function(dt)
             if ch.FloorMaterial ~= Enum.Material.Air then ch:ChangeState(Enum.HumanoidStateType.Jumping) end
         end
     end
-    -- fullbright
-    if settings.fullbright then
-        Lighting.Brightness = 2 Lighting.ClockTime = 14 Lighting.FogEnd = 100000
-        Lighting.Ambient = Color3.fromRGB(255, 255, 255) Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-    end
+    -- fullbright: se aplica al activar + refresco cada 2s (reescribirlo cada frame recalcula la luz y baja FPS)
     -- anti-void
     if settings.antiVoid and r and r.Position.Y < -60 then
         r.CFrame = CFrame.new(0, 20, 0) r.Velocity = Vector3.zero
     end
+    end)
+    if not okLoop then dprint("[sys] loop:", tostring(errLoop):sub(1, 90)) end
 end)
 
 -- Fly (Heartbeat, compatible móvil con joystick)
@@ -2253,6 +2366,12 @@ task.spawn(function()
         end
         -- wallbang REAL = el silent ignora paredes (ver getSilentHitPos) + X-ray para verlos.
         -- (El viejo loop de CanCollide no afectaba a las balas y se eliminó.)
+        -- refresco fullbright cada 2s por si el juego resetea la luz
+        if settings.fullbright and tick() - fbLastRefresh > 2 then
+            fbLastRefresh = tick()
+            Lighting.Brightness = 2 Lighting.ClockTime = 14 Lighting.FogEnd = 100000
+            Lighting.Ambient = Color3.fromRGB(255, 255, 255) Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        end
         task.wait(0.5)
     end
 end)
@@ -2335,8 +2454,8 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.36 NOLEAK", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-dprint("[ZVOLT V2.36 NOLEAK] cargado OK - sin fugas entre ejecuciones")
+notify("ZVOLT V2.38 FPS", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+dprint("[ZVOLT V2.38 FPS] cargado OK - rendimiento optimizado")
 if hookmetamethod == nil then
     notify("Executor limitado", "Sin hookmetamethod: Silent y SPY no funcionan aquí. Aimbot, ESP, Trigger, Hitbox y Magic sí.")
     dprint("[ZVOLT] executor sin hookmetamethod: silent/SPY desactivados por hardware")
