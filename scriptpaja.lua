@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB V2 — FRESH EDITION
+    ZVOLT HUB V2.28 SPY+ — FRESH EDITION
     UI moderna + más funciones + mejor rendimiento
     By Zvolt
 ]]
@@ -254,7 +254,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.27 PERFILES" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.28 SPY+" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -297,7 +297,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.27 PERFILES" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.28 SPY+" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -1519,7 +1519,7 @@ function tryEnableSpy()
                 if not (s and r) then
                     if method == "FireServer" or method == "InvokeServer" or method == "Raycast"
                     or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList"
-                    or method == "FindPartOnRayWithWhitelist" then
+                    or method == "FindPartOnRayWithWhitelist" or method == "Fire" then
                         local nm = "?"
                         pcall(function() nm = self:GetFullName() end)
                         local key = method .. "|" .. nm
@@ -2170,5 +2170,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.27 PERFILES", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.27 PERFILES] cargado OK - silent por juego en Combat")
+notify("ZVOLT V2.28 SPY+", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.28 SPY+] cargado OK - spy ampliado en Combat")
