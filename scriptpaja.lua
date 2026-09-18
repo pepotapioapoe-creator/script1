@@ -26,6 +26,7 @@ local settings = {
     silentBone = "Same as Aimbot", silentFov = 200,
     magicBulletsEnabled = false,
     spyEnabled = false,
+    silentGame = "Universal",
     triggerbot = false, triggerDelay = 150, triggerWarned = false,
     aimDebug = false,
     aimAuto = false,
@@ -45,6 +46,7 @@ local settings = {
     jumpEnabled = false, customJump = 100, bhopEnabled = false, infJumpEnabled = false,
     spinEnabled = false, spinSpeed = 50, ctrlClickTpEnabled = false, gravity = 196.2, antiVoid = false,
     tapTp = false, freecam = false,
+    jerkEnabled = false, jerkPower = 5,
     -- troll / tp
     trollTrackEnabled = false, trollOrbitEnabled = false, orbitSpeed = 3, orbitRadius = 6, trackDist = 3,
     flingEnabled = false, headSitEnabled = false, spectateEnabled = false,
@@ -252,7 +254,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.25 FULL" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.27 PERFILES" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -295,7 +297,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.25 FULL" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.27 PERFILES" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -588,6 +590,16 @@ local function ghostBlock()
     return false
 end
 
+--// PERFILES SILENT POR JUEGO (estilo silent.lua del video: remote + índices exactos).
+-- Universal = escaneo automático. Los demás se llenan con la data del F9 que pases.
+-- originIdx/dirIdx/hitIdx = posición del argumento (1 = primero). hitIdx es opcional.
+local SILENT_PROFILES = {
+    ["Universal"] = { auto = true },
+    ["BloxStrike"] = { placeIds = {}, remote = nil, originIdx = 1, dirIdx = 2, hitIdx = nil },
+    ["FFA"] = { placeIds = {}, remote = nil, originIdx = 1, dirIdx = 2, hitIdx = nil },
+    ["Juego 4"] = { placeIds = {}, remote = nil, originIdx = 1, dirIdx = 2, hitIdx = nil },
+}
+
 --// ===== CONSTRUIR PESTAÑAS =====
 -- COMBAT (Silent primero para que se vea sin hacer scroll)
 local c4 = createCard(pages["combat"], "👻 Silent Aim (tiros fantasma)", 200)
@@ -607,6 +619,42 @@ createDropdown(c4, "Hueso silent", {"Head", "HumanoidRootPart", "UpperTorso", "L
 end)
 createToggle(c4, "Team Check", function(v) settings.teamCheck = v end)
 createToggle(c4, "Wall Check", function(v) settings.wallCheck = v end)
+local profileNames = {}
+for k in pairs(SILENT_PROFILES) do table.insert(profileNames, k) end
+table.sort(profileNames)
+local profBtn = createDropdown(c4, "Perfil silent", profileNames, "Universal", function(v)
+    settings.silentGame = v
+    notify("Silent", "Perfil: " .. v)
+end)
+local gameInfoLbl = Instance.new("TextLabel")
+gameInfoLbl.Size = UDim2.new(1, 0, 0, 18) gameInfoLbl.BackgroundTransparency = 1
+gameInfoLbl.Font = FONT_MAIN gameInfoLbl.TextSize = 11 gameInfoLbl.TextColor3 = COLOR_SUBTEXT
+gameInfoLbl.TextXAlignment = Enum.TextXAlignment.Left
+gameInfoLbl.Text = "Este juego PlaceId: " .. tostring(game.PlaceId)
+gameInfoLbl.Parent = c4
+createButton(c4, "📋 Copiar datos del juego", function()
+    local s = "PlaceId: " .. tostring(game.PlaceId) .. " JobId: " .. tostring(game.JobId)
+    if setclipboard then
+        setclipboard(s)
+        notify("Silent", "Datos copiados. Pásamelos con el log del SPY.")
+    else
+        print("[ZVOLT-SPY] DATOS DEL JUEGO:", s)
+        notify("Silent", "Sin portapapeles: mira la consola F9.")
+    end
+end, false)
+-- auto-detecta el juego por PlaceId y elige su perfil solo
+for pname, prof in pairs(SILENT_PROFILES) do
+    if prof.placeIds then
+        for _, pid in ipairs(prof.placeIds) do
+            if pid == game.PlaceId then
+                settings.silentGame = pname
+                profBtn.Text = pname
+                notify("Silent", "Juego detectado: perfil " .. pname)
+                break
+            end
+        end
+    end
+end
 local tMagic
 tMagic = createToggle(c4, "Magic Bullets ⚠️", function(v)
     if v and ghostBlock() then tMagic.Set(false) return end
@@ -726,6 +774,13 @@ tSpin = createToggle(m3, "Spinbot ⚠️ detectable", function(v)
 end, "spinbot")
 table.insert(riskyToggles, tSpin)
 createSlider(m3, "Velocidad spin", settings.spinSpeed, 5, 200, function(v) settings.spinSpeed = v end)
+local tJerk
+tJerk = createToggle(m3, "Jerk anti-aim ⚠️", function(v)
+    if v and ghostBlock() then tJerk.Set(false) return end
+    settings.jerkEnabled = v
+end)
+table.insert(riskyToggles, tJerk)
+createSlider(m3, "Jerk power", settings.jerkPower, 1, 10, function(v) settings.jerkPower = v end)
 local tCtrl
 tCtrl = createToggle(m3, "Ctrl + Click TP 🖱️", function(v)
     if v and ghostBlock() then tCtrl.Set(false) return end
@@ -1004,6 +1059,7 @@ local function applyGhostOff()
     settings.ammoEnabled = false settings.rapidFire = false
     settings.magicBulletsEnabled = false
     settings.triggerbot = false settings.tapTp = false settings.tpFollow = false
+    settings.jerkEnabled = false
     restoreDefaults()
     pcall(function() workspace.Gravity = 196.2 end)
 end
@@ -1565,6 +1621,35 @@ function tryEnableSilentAim()
                 elseif method == "FireServer" or method == "InvokeServer" then
                     local hitPos = getSilentHitPos()
                     if hitPos then
+                        -- 0) perfil del juego: reemplazo quirúrgico si conocemos su remote (video style)
+                        do
+                            local prof = SILENT_PROFILES[settings.silentGame]
+                            local rname = nil
+                            pcall(function() rname = self:GetFullName() end)
+                            if prof and prof.remote and rname == prof.remote then
+                                local o = args[prof.originIdx or 1]
+                                if o and typeof(o) == "Vector3" then
+                                    local nargs = {}
+                                    for i = 1, n do nargs[i] = args[i] end
+                                    local ch = false
+                                    if prof.dirIdx and nargs[prof.dirIdx] and typeof(nargs[prof.dirIdx]) == "Vector3" then
+                                        local nd = hitPos - o
+                                        if nd.Magnitude > 0.5 then
+                                            nargs[prof.dirIdx] = nd.Unit * nargs[prof.dirIdx].Magnitude
+                                            ch = true
+                                        end
+                                    end
+                                    if prof.hitIdx and nargs[prof.hitIdx] and typeof(nargs[prof.hitIdx]) == "Vector3" then
+                                        nargs[prof.hitIdx] = hitPos
+                                        ch = true
+                                    end
+                                    if ch then
+                                        silentFlash = 0.2
+                                        return oldNC(self, table.unpack(nargs, 1, n))
+                                    end
+                                end
+                            end
+                        end
                         silentBypass = true
                         local aimRef = nil
                         pcall(function() aimRef = mouse.Hit.Position end)
@@ -1879,6 +1964,16 @@ RunService.RenderStepped:Connect(function(dt)
     if settings.spinEnabled and not settings.ghostMode and r and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.flingEnabled then
         r.CFrame = r.CFrame * CFrame.Angles(0, math.rad(settings.spinSpeed), 0)
     end
+    -- jerk anti-aim: yaw aleatorio + micro-jitter cada frame (rompe locks enemigos)
+    if settings.jerkEnabled and not settings.ghostMode and r
+    and not settings.flyEnabled and not settings.trollTrackEnabled
+    and not settings.trollOrbitEnabled and not settings.flingEnabled then
+        local pw = settings.jerkPower or 5
+        r.CFrame = r.CFrame * CFrame.Angles(0, math.rad(math.random(-pw * 18, pw * 18)), 0)
+        r.CFrame = r.CFrame + Vector3.new((math.random() - 0.5) * pw * 0.5, 0, (math.random() - 0.5) * pw * 0.5)
+        r.Velocity = Vector3.zero
+        r.RotVelocity = Vector3.zero
+    end
     -- noclip (solo escribe si hace falta: menos escrituras = menos huellas)
     if settings.noclipEnabled and localPlayer.Character then
         for _, part in ipairs(localPlayer.Character:GetDescendants()) do
@@ -2075,5 +2170,5 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.25 FULL", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.25 FULL] cargado OK - menu limpio + mas utilidades")
+notify("ZVOLT V2.27 PERFILES", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.27 PERFILES] cargado OK - silent por juego en Combat")
