@@ -1382,6 +1382,7 @@ local function clearESP(plr)
     if o then
         safeDestroy(o.hl) safeDestroy(o.bb) safeDestroy(o.line) safeDestroy(o.box)
         if o.sk then for _, f in ipairs(o.sk) do safeDestroy(f) end end
+        if o.skj then for _, f in ipairs(o.skj) do safeDestroy(f) end end
         espData[plr] = nil
     end
     -- no tocamos espCharOf aquí a propósito en el loop por frame;
@@ -1416,18 +1417,32 @@ local function drawSeg(f, ax, ay, bx, by, col)
     local dx, dy = bx - ax, by - ay
     local len = math.sqrt(dx * dx + dy * dy)
     if len < 1 then f.Visible = false return end
-    f.Size = UDim2.new(0, 1.5, 0, len)
+    f.Size = UDim2.new(0, 1, 0, len)
     f.Position = UDim2.new(0, (ax + bx) / 2, 0, (ay + by) / 2)
     f.Rotation = math.deg(math.atan2(dy, dx)) - 90
-    f.BackgroundColor3 = col f.Visible = true
+    f.BackgroundColor3 = col f.BackgroundTransparency = 0.1 f.Visible = true
+end
+local function skDot(objs, i)
+    objs.skj = objs.skj or {}
+    local f = objs.skj[i]
+    if not f then
+        f = Instance.new("Frame")
+        f.AnchorPoint = Vector2.new(0.5, 0.5) f.BorderSizePixel = 0
+        f.Size = UDim2.new(0, 3, 0, 3)
+        f.BackgroundColor3 = Accent() f.Visible = false f.Parent = gui
+        corner(f, 999)
+        objs.skj[i] = f
+    end
+    return f
 end
 local function hideSk(objs)
     if objs.sk then for _, f in ipairs(objs.sk) do f.Visible = false end end
+    if objs.skj then for _, f in ipairs(objs.skj) do f.Visible = false end end
 end
 local function buildESP(plr, char)
     clearESP(plr)
     local objs = {}
-    objs.sk = {}
+    objs.sk = {} objs.skj = {}
     local bb = Instance.new("BillboardGui")
     bb.Size = UDim2.new(0, 170, 0, 46) bb.StudsOffset = Vector3.new(0, 2.8, 0) bb.AlwaysOnTop = true
     bb:SetAttribute("ZV2", true)
@@ -1528,27 +1543,71 @@ local function updateESP(plr)
             else objs.box.Visible = false end
         else objs.box.Visible = false end
     else objs.box.Visible = false end
-    -- esqueleto sutil
+    -- esqueleto sutil (huesos finos + puntos en articulaciones)
     if settings.skeleton then
         local pm = {}
         for _, c in ipairs(char:GetChildren()) do
             if c:IsA("BasePart") then pm[c.Name] = c end
         end
-        local list = pm["UpperTorso"] and SK_R15 or SK_R6
+        local segs, dots = {}, {}
+        local function dotP(p)
+            for _, q in ipairs(dots) do
+                if (q - p).Magnitude < 0.05 then return end
+            end
+            if #dots < 16 then dots[#dots + 1] = p end
+        end
+        if pm["UpperTorso"] then
+            for _, s in ipairs(SK_R15) do
+                local a, b = pm[s[1]], pm[s[2]]
+                if a and b then
+                    segs[#segs + 1] = {a.Position, b.Position}
+                    dotP(a.Position) dotP(b.Position)
+                end
+            end
+        else
+            -- R6: monigote desde el torso (hombros/cadera/nuca calculados)
+            local torso, head = pm["Torso"], pm["Head"]
+            if torso then
+                local cf = torso.CFrame
+                local up, rt = cf.UpVector, cf.RightVector
+                local sx, sy = torso.Size.X / 2, torso.Size.Y / 2
+                local neck = torso.Position + up * sy
+                local hipC = torso.Position - up * sy
+                local shL = torso.Position - rt * sx + up * (sy * 0.6)
+                local shR = torso.Position + rt * sx + up * (sy * 0.6)
+                if head then segs[#segs + 1] = {head.Position, neck} dotP(head.Position) end
+                dotP(neck) dotP(hipC) dotP(shL) dotP(shR)
+                local limbs = {{"Left Arm", shL}, {"Right Arm", shR}, {"Left Leg", hipC}, {"Right Leg", hipC}}
+                for _, L in ipairs(limbs) do
+                    local p = pm[L[1]]
+                    if p then segs[#segs + 1] = {L[2], p.Position} dotP(p.Position) end
+                end
+            elseif head then
+                dotP(head.Position)
+            end
+        end
         local si = 0
-        for _, s in ipairs(list) do
-            local a, b = pm[s[1]], pm[s[2]]
+        for _, s in ipairs(segs) do
+            local sa, ona = camera:WorldToViewportPoint(s[1])
+            local sb, onb = camera:WorldToViewportPoint(s[2])
             si = si + 1
             local f = skSeg(objs, si)
-            if a and b then
-                local sa, ona = camera:WorldToViewportPoint(a.Position)
-                local sb, onb = camera:WorldToViewportPoint(b.Position)
-                if ona and onb then
-                    drawSeg(f, sa.X, sa.Y, sb.X, sb.Y, col)
-                else f.Visible = false end
+            if ona and onb then
+                drawSeg(f, sa.X, sa.Y, sb.X, sb.Y, col)
             else f.Visible = false end
         end
         for i = si + 1, #objs.sk do objs.sk[i].Visible = false end
+        local di = 0
+        for _, p in ipairs(dots) do
+            local sp, on = camera:WorldToViewportPoint(p)
+            di = di + 1
+            local d = skDot(objs, di)
+            if on then
+                d.Position = UDim2.new(0, sp.X, 0, sp.Y)
+                d.BackgroundColor3 = col d.Visible = true
+            else d.Visible = false end
+        end
+        for i = di + 1, #(objs.skj or {}) do objs.skj[i].Visible = false end
     else hideSk(objs) end
 end
 Players.PlayerRemoving:Connect(function(plr) if not dead then clearESP(plr) espCharOf[plr] = nil end end)
@@ -1952,8 +2011,13 @@ RunService.RenderStepped:Connect(function(dt)
     -- speed / jump / bhop (solo escribir si cambió el valor)
     local ch = myHum()
     if ch and not settings.ghostMode and not settings.trollTrackEnabled and not settings.trollOrbitEnabled then
-        local wantSpeed = settings.speedEnabled and settings.customSpeed or DEFAULT_SPEED
-        if ch.WalkSpeed ~= wantSpeed then ch.WalkSpeed = wantSpeed end
+        if settings.speedEnabled then
+            if ch.WalkSpeed ~= settings.customSpeed then ch.WalkSpeed = settings.customSpeed end
+        else
+            -- manos fuera: no se toca WalkSpeed; se adopta la del juego
+            -- (sprint/agacharse/rondas) para restaurar bien al salir
+            DEFAULT_SPEED = ch.WalkSpeed
+        end
         if settings.jumpEnabled and ch.JumpPower ~= settings.customJump then ch.JumpPower = settings.customJump ch.UseJumpPower = true end
         if settings.bhopEnabled and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
             if ch.FloorMaterial ~= Enum.Material.Air then ch:ChangeState(Enum.HumanoidStateType.Jumping) end
@@ -1978,22 +2042,27 @@ RunService.Heartbeat:Connect(function(dt)
         h.PlatformStand = true
         local cf = camera.CFrame
         local mv = Vector3.zero
-        local md = h.MoveDirection -- funciona con joystick móvil ✅
-        if md.Magnitude > 0.1 then
-            local fwd = cf.LookVector * Vector3.new(1, 0, 1)
-            local rgt = cf.RightVector * Vector3.new(1, 0, 1)
-            if fwd.Magnitude > 0 then fwd = fwd.Unit else fwd = Vector3.zero end
-            if rgt.Magnitude > 0 then rgt = rgt.Unit else rgt = Vector3.zero end
-            mv = mv + (fwd * -md.Z) + (rgt * md.X)
-            -- joystick arriba = avanzar; si mira arriba/abajo también vuela vertical un poco
-            mv = mv + Vector3.new(0, (-md.Z) * cf.LookVector.Y * 0.8, 0)
+        if isTouch then
+            -- móvil: joystick (MoveDirection) + botones táctiles
+            local md = h.MoveDirection
+            if md.Magnitude > 0.1 then
+                local fwd = cf.LookVector * Vector3.new(1, 0, 1)
+                local rgt = cf.RightVector * Vector3.new(1, 0, 1)
+                if fwd.Magnitude > 0 then fwd = fwd.Unit else fwd = Vector3.zero end
+                if rgt.Magnitude > 0 then rgt = rgt.Unit else rgt = Vector3.zero end
+                mv = mv + (fwd * -md.Z) + (rgt * md.X)
+                -- joystick arriba = avanzar; si mira arriba/abajo también vuela vertical un poco
+                mv = mv + Vector3.new(0, (-md.Z) * cf.LookVector.Y * 0.8, 0)
+            end
+        else
+            -- PC: teclas (una sola vez; MoveDirection ya las incluye y duplicaba = diagonal)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then mv = mv + cf.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then mv = mv - cf.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then mv = mv - cf.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then mv = mv + cf.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0, 1, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then mv = mv - Vector3.new(0, 1, 0) end
         end
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then mv = mv + cf.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then mv = mv - cf.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then mv = mv - cf.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then mv = mv + cf.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then mv = mv - Vector3.new(0, 1, 0) end
         if flyUpHeld then mv = mv + Vector3.new(0, 1, 0) end
         if flyDownHeld then mv = mv - Vector3.new(0, 1, 0) end
         if mv.Magnitude > 1 then mv = mv.Unit end
