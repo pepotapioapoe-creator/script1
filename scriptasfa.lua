@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB V2.33 BRUTE — FRESH EDITION
+    ZVOLT HUB V2.35 NOLOG — FRESH EDITION
     UI moderna + más funciones + mejor rendimiento
     By Zvolt
 ]]
@@ -57,6 +57,7 @@ local settings = {
     -- ui
     uiToggleKey = Enum.KeyCode.RightShift, theme = "Cyan", uiTransparency = 0,
     ghostMode = false,
+    verbose = false,
 }
 local DEFAULT_SPEED, DEFAULT_JUMP = 16, 50
 local hitboxOriginals, currentAimTarget = {}, nil
@@ -223,6 +224,12 @@ local function notify(title, text)
         StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = 1.2})
     end)
 end
+-- Prints solo con Log F9 activado: el anticheat puede leer la consola y banear por el texto.
+local function dprint(...)
+    if settings.verbose then
+        print(...)
+    end
+end
 
 --// FOV + mira
 local fovFrame = Instance.new("Frame")
@@ -260,7 +267,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.33 BRUTE" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.35 NOLOG" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -303,7 +310,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.33 BRUTE" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.35 NOLOG" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -644,7 +651,7 @@ createButton(c4, "📋 Copiar datos del juego", function()
         setclipboard(s)
         notify("Silent", "Datos copiados. Pásamelos con el log del SPY.")
     else
-        print("[ZVOLT-SPY] DATOS DEL JUEGO:", s)
+        dprint("[ZVOLT-SPY] DATOS DEL JUEGO:", s)
         notify("Silent", "Sin portapapeles: mira la consola F9.")
     end
 end, false)
@@ -1021,7 +1028,7 @@ createButton(w1, "🔍 Ver arma · F9", function()
     local tp = settings.selectedTpPlayer
     if tp and tp.Character then
         for _, t in ipairs(tp.Character:GetChildren()) do
-            if t:IsA("Tool") then print("[ZVOLT] " .. tp.Name .. " tiene: " .. t.Name) end
+            if t:IsA("Tool") then dprint("[ZVOLT] " .. tp.Name .. " tiene: " .. t.Name) end
         end
         notify("Weapon", "Revisa la consola (F9).")
     end
@@ -1083,6 +1090,13 @@ local tGhost
 tGhost = createToggle(cfGhost, "MODO FANTASMA", function(v)
     settings.ghostMode = v
     if v then applyGhostOff() notify("Fantasma", "Solo queda lo invisible al servidor: ESP + aimbot camara + luz.") end
+end)
+createToggle(cfGhost, "Log F9 (solo diagnóstico)", function(v)
+    settings.verbose = v
+    if v then
+        notify("Consola", "Log activado: úsalo y apágalo, el anticheat lee la consola.")
+        print("[sys] verbose ON")
+    end
 end)
 local cf1 = createCard(pages["config"], "🎨 Tema", 150)
 local themeRow = Instance.new("Frame") themeRow.Size = UDim2.new(1, 0, 0, 32) themeRow.BackgroundTransparency = 1 themeRow.Parent = cf1
@@ -1158,7 +1172,7 @@ createButton(cf3, "📋 Copiar JobId", function()
     else
         notify("Cuenta", "JobId: " .. j)
     end
-    print("JOBID:", j)
+    dprint("JOBID:", j)
 end, false)
 createButton(cf3, "🗑️ Destruir Zvolt", function()
     restoreDefaults() restoreLighting()
@@ -1468,6 +1482,43 @@ local function getSilentHitPos()
             end
         end
     end
+    if not bestPart and settings.aimNpcs then
+        -- bots: también para el silent (si tus enemigos no son Players, aquí los encuentra)
+        local function scanS(c)
+            for _, m in ipairs(c:GetChildren()) do
+                if bestPart then break end
+                if m:IsA("Model") and m ~= localPlayer.Character
+                and not Players:GetPlayerFromCharacter(m) then
+                    local hum = m:FindFirstChildOfClass("Humanoid")
+                    if settings.aimBrute or (hum and hum.Health > 0) then
+                        local part = getAimPart(m, bone)
+                        if part and lr and (lr.Position - part.Position).Magnitude <= settings.maxDistance then
+                            local blocked = false
+                            if not settings.wallbangEnabled then
+                                silentBypass = true
+                                blocked = hasWallBetween(camera.CFrame.Position, part.Position, part)
+                                silentBypass = false
+                            end
+                            if not blocked then
+                                local sp, on = camera:WorldToViewportPoint(part.Position)
+                                if on then
+                                    local d = (Vector2.new(sp.X, sp.Y) - ml).Magnitude
+                                    if d <= settings.silentFov and d < bestD then
+                                        bestD = d
+                                        bestPart = part
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        scanS(workspace)
+        for _, c in ipairs(workspace:GetChildren()) do
+            if not bestPart and c:IsA("Folder") then scanS(c) end
+        end
+    end
     if bestPart then
         local pred = settings.silentPrediction or 0.12
         local vel = bestPart.Velocity
@@ -1574,7 +1625,7 @@ function tryEnableSpy()
                                     parts[#parts + 1] = "Inst:" .. an
                                 else parts[#parts + 1] = t end
                             end
-                            print("[ZVOLT-SPY]", method, nm, "n=" .. n, table.concat(parts, " | "))
+                            dprint("[ZVOLT-SPY]", method, nm, "n=" .. n, table.concat(parts, " | "))
                         end
                     end
                 end
@@ -1599,7 +1650,7 @@ workspace.DescendantAdded:Connect(function(inst)
     spyProjLast = now
     local pn = "?"
     pcall(function() pn = inst:GetFullName() end)
-    print("[ZVOLT-SPY] parte rápida cerca:", pn, "vel:", math.floor(inst.AssemblyLinearVelocity.Magnitude))
+    dprint("[ZVOLT-SPY] parte rápida cerca:", pn, "vel:", math.floor(inst.AssemblyLinearVelocity.Magnitude))
 end)
 function tryEnableSilentAim()
     if silentHooked then return end
@@ -1934,7 +1985,7 @@ RunService.RenderStepped:Connect(function(dt)
                                 if lr2 then dist = math.floor((lr2.Position - anchor.Position).Magnitude) end
                             end
                             shown = shown + 1
-                            print(string.format("[ZVOLT-DEEP] %s | hum=%s hp=%s head=%s hrp=%s | pant=%s(%s) dist=%s",
+                            dprint(string.format("[ZVOLT-DEEP] %s | hum=%s hp=%s head=%s hrp=%s | pant=%s(%s) dist=%s",
                                 tostring(label), hum and "SI" or "NO", hum and tostring(math.floor(hum.Health)) or "-",
                                 hd and "SI" or "NO", hrp and "SI" or "NO",
                                 tostring(scr), tostring(on), tostring(dist)))
@@ -1979,10 +2030,11 @@ RunService.RenderStepped:Connect(function(dt)
                 silentStatus.Text = t
                 if nowD - diagF9Last > 4 then
                     diagF9Last = nowD
-                    print(string.format(
-                        "[ZVOLT-DIAG] hooks=%s silent=%s target=%s redirects=%d magic_tracked=%d magic_acquired=%d fov=%d/%d hitchance=%d perfil=%s",
+                    dprint(string.format(
+                        "[ZVOLT-DIAG] hooks=%s silent=%s magic=%s target=%s redirects=%d magic_tracked=%d magic_acquired=%d fov=%d/%d hitchance=%d perfil=%s",
                         (hookmetamethod ~= nil) and "OK" or "FALTA",
                         tostring(settings.silentAimEnabled),
+                        tostring(settings.magicBulletsEnabled),
                         tostring(silentLastTarget or "-"),
                         silentRedirects, tracked, magicAcquired,
                         settings.fovRadius, settings.silentFov,
@@ -2244,9 +2296,9 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.33 BRUTE", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.33 BRUTE] cargado OK - bruto en silent/trigger/ESP")
+notify("ZVOLT V2.35 NOLOG", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+dprint("[ZVOLT V2.35 NOLOG] cargado OK - telemetria silent/magic")
 if hookmetamethod == nil then
     notify("Executor limitado", "Sin hookmetamethod: Silent y SPY no funcionan aquí. Aimbot, ESP, Trigger, Hitbox y Magic sí.")
-    print("[ZVOLT] executor sin hookmetamethod: silent/SPY desactivados por hardware")
+    dprint("[ZVOLT] executor sin hookmetamethod: silent/SPY desactivados por hardware")
 end
