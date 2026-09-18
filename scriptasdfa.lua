@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB V2.32 POS — FRESH EDITION
+    ZVOLT HUB V2.33 BRUTE — FRESH EDITION
     UI moderna + más funciones + mejor rendimiento
     By Zvolt
 ]]
@@ -260,7 +260,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.32 POS" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.33 BRUTE" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -303,7 +303,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.32 POS" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.33 BRUTE" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -1336,9 +1336,10 @@ local function updateESP(plr)
     if not objs or espCharOf[plr] ~= char then buildESP(plr, char) objs = espData[plr] if not objs then return end end
     local hum = char:FindFirstChildOfClass("Humanoid")
     local lr = myRoot()
-    if not hum or not lr then return end
+    if not lr then return end
+    if not hum and not settings.aimBrute then return end
     local dist = math.floor((lr.Position - root.Position).Magnitude)
-    if dist > settings.maxDistance or hum.Health <= 0 then
+    if dist > settings.maxDistance or (hum and hum.Health <= 0) then
         objs.bb.Enabled = false objs.line.Visible = false objs.box.Visible = false
         if objs.hl then objs.hl.Enabled = false end
         return
@@ -1360,9 +1361,9 @@ local function updateESP(plr)
     objs.name.Text = txt ~= "" and txt or plr.Name
     objs.name.Visible = (settings.espNames or settings.espDistance)
     objs.name.TextColor3 = col
-    -- vida
-    objs.hpBg.Visible = settings.espHealthBar
-    if settings.espHealthBar then
+    -- vida (solo si hay humanoide real; en bruto se oculta la barra)
+    objs.hpBg.Visible = settings.espHealthBar and hum ~= nil
+    if hum and settings.espHealthBar then
         local pct = math.clamp(hum.Health / math.max(1, hum.MaxHealth), 0, 1)
         objs.hpFill.Size = UDim2.new(pct, 0, 1, 0)
         objs.hpFill.BackgroundColor3 = Color3.fromHSV(pct * 0.33, 1, 1)
@@ -1443,7 +1444,9 @@ local function getSilentHitPos()
     local lr = myRoot()
     local bestPart, bestD = nil, settings.silentFov
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= localPlayer and isAlive(p) and not sameTeam(p, localPlayer) then
+        -- en bruto (juegos sin Humanoid como BloxStrike) basta con tener personaje
+        local sAlive = (settings.aimBrute and p.Character ~= nil) or isAlive(p)
+        if p ~= localPlayer and sAlive and not sameTeam(p, localPlayer) then
             local part = getAimPart(p.Character, bone)
             if part and lr and (lr.Position - part.Position).Magnitude <= settings.maxDistance then
                 -- wallbang ON = el silent ignora paredes (pega tras pared si el server no valida LOS)
@@ -2178,7 +2181,8 @@ task.spawn(function()
                 local found = false
                 for _, p in ipairs(Players:GetPlayers()) do
                     if found then break end
-                    if p ~= localPlayer and isAlive(p) and not sameTeam(p, localPlayer) then
+                    local tAlive = (settings.aimBrute and p.Character ~= nil) or isAlive(p)
+                    if p ~= localPlayer and tAlive and not sameTeam(p, localPlayer) then
                         local part = p.Character and getAimPart(p.Character, settings.targetPart)
                         if part then
                             local sp, on = camera:WorldToViewportPoint(part.Position)
@@ -2240,8 +2244,8 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.32 POS", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-print("[ZVOLT V2.32 POS] cargado OK - estados arriba a la izquierda")
+notify("ZVOLT V2.33 BRUTE", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+print("[ZVOLT V2.33 BRUTE] cargado OK - bruto en silent/trigger/ESP")
 if hookmetamethod == nil then
     notify("Executor limitado", "Sin hookmetamethod: Silent y SPY no funcionan aquí. Aimbot, ESP, Trigger, Hitbox y Magic sí.")
     print("[ZVOLT] executor sin hookmetamethod: silent/SPY desactivados por hardware")
