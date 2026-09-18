@@ -1,936 +1,1067 @@
+--[[
+    ZVOLT HUB - FULL VERSION (FIXED ESP BOX & CTRL+CLICK TOGGLE + TROLL & WALLBANG)
+]]--
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Lighting = game:GetService("Lighting")
-local localPlayer = game:GetService("Players").LocalPlayer
-local mouse = localPlayer and localPlayer:GetMouse()
+local StarterGui = game:GetService("StarterGui")
+local localPlayer = Players.LocalPlayer
 local camera = workspace.CurrentCamera
-local orbitAngle = 0
-local ZV = _G.ZV
-assert(ZV and ZV.settings and ZV.updateESP, "Falta P1/P2")
-local settings = ZV.settings
-local gui = ZV.gui
-local notify = ZV.notify
-local tween = ZV.tween
-local myRoot = ZV.myRoot
-local myHum = ZV.myHum
-local targetRootOf = ZV.targetRootOf
-local isAlive = ZV.isAlive
-local sameTeam = ZV.sameTeam
-local hasWallBetween = ZV.hasWallBetween
-local rayParams = ZV.rayParams
-local Accent = ZV.Accent
-local hitboxOriginals = ZV.hitboxOriginals
-local DEFAULT_SPEED = ZV.DEFAULT_SPEED
-local DEFAULT_JUMP = ZV.DEFAULT_JUMP
-local updateESP = ZV.updateESP
-local clearESP = ZV.clearESP
-local espData = ZV.espData
-local espCharOf = ZV.espCharOf
-local refreshPlayers = ZV.refreshPlayers
-local getAimPart = ZV.getAimPart
-local aimRefPoint = ZV.aimRefPoint
-local fovFrame = ZV.fovFrame
-local fovDot = ZV.fovDot
-local fovStroke = ZV.fovStroke
-local aimStatus = ZV.aimStatus
-local silentStatus = ZV.silentStatus
-local statsLabel = ZV.statsLabel
-local aimBtn = ZV.aimBtn
-local flyUpBtn = ZV.flyUpBtn
-local flyDownBtn = ZV.flyDownBtn
-local loadBar = ZV.loadBar
-local loader = ZV.loader
-local mainFrame = ZV.mainFrame
-local dprint = ZV.dprint
-local SILENT_PROFILES = ZV.SILENT_PROFILES
-local COLOR_SUBTEXT = ZV.COLOR_SUBTEXT
-local discreetText = ZV.discreetText
---// SILENT AIM 👻 (redirige tiros sin mover la cámara)
-settings.silentBone = settings.silentBone or "Same as Aimbot"
-local silentHooked = false
-local silentBypass = false -- en true = son nuestros propios raycasts (wallcheck), no redirigir
-local silentFlash = 0 -- feedback visual: el FOV parpadea cuando el silent redirige un tiro
-local silentRedirects = 0 -- telemetría: tiros redirigidos en total
-local silentLastTarget = nil -- último objetivo adquirido
-local diagLast, diagF9Last = 0, 0 -- throttles del panel y del F9
-local function silentBoneName()
-    if not settings.silentBone or settings.silentBone == "Same as Aimbot" then
-        return settings.targetPart
-    end
-    return settings.silentBone
-end
-local function getSilentHitPos()
-    if not settings.silentAimEnabled then return nil end
-    if math.random(1, 100) > (settings.silentHitChance or 100) then return nil end
-    local bone = silentBoneName()
-    local ml = aimRefPoint()
-    local lr = myRoot()
-    local bestPart, bestD = nil, settings.silentFov
-    for _, p in ipairs(Players:GetPlayers()) do
-        -- en bruto (juegos sin Humanoid como BloxStrike) basta con tener personaje
-        local sAlive = (settings.aimBrute and p.Character ~= nil) or isAlive(p)
-        if p ~= localPlayer and sAlive and not sameTeam(p, localPlayer) then
-            local part = getAimPart(p.Character, bone)
-            if part and lr and (lr.Position - part.Position).Magnitude <= settings.maxDistance then
-                -- wallbang ON = el silent ignora paredes (pega tras pared si el server no valida LOS)
-                local blocked = false
-                if not settings.wallbangEnabled then
-                    silentBypass = true
-                    blocked = hasWallBetween(camera.CFrame.Position, part.Position, part)
-                    silentBypass = false
-                end
-                if not blocked then
-                    local sp, on = camera:WorldToViewportPoint(part.Position)
-                    if on then
-                        local d = (Vector2.new(sp.X, sp.Y) - ml).Magnitude
-                        if d <= settings.silentFov and d < bestD then
-                            bestD = d bestPart = part
-                        end
-                    end
-                end
-            end
-        end
-    end
-    if not bestPart and settings.aimNpcs then
-        -- bots: también para el silent (si tus enemigos no son Players, aquí los encuentra)
-        local function scanS(c)
-            for _, m in ipairs(c:GetChildren()) do
-                if bestPart then break end
-                if m:IsA("Model") and m ~= localPlayer.Character
-                and not Players:GetPlayerFromCharacter(m) then
-                    local hum = m:FindFirstChildOfClass("Humanoid")
-                    if settings.aimBrute or (hum and hum.Health > 0) then
-                        local part = getAimPart(m, bone)
-                        if part and lr and (lr.Position - part.Position).Magnitude <= settings.maxDistance then
-                            local blocked = false
-                            if not settings.wallbangEnabled then
-                                silentBypass = true
-                                blocked = hasWallBetween(camera.CFrame.Position, part.Position, part)
-                                silentBypass = false
-                            end
-                            if not blocked then
-                                local sp, on = camera:WorldToViewportPoint(part.Position)
-                                if on then
-                                    local d = (Vector2.new(sp.X, sp.Y) - ml).Magnitude
-                                    if d <= settings.silentFov and d < bestD then
-                                        bestD = d
-                                        bestPart = part
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        scanS(workspace)
-        for _, c in ipairs(workspace:GetChildren()) do
-            if not bestPart and c:IsA("Folder") then scanS(c) end
-        end
-    end
-    if bestPart then
-        local pred = settings.silentPrediction or 0.12
-        local vel = bestPart.Velocity
-        if vel.Magnitude > 60 then vel = vel.Unit * 60 end -- anti-fling loco
-        pcall(function()
-            local m = bestPart:FindFirstAncestorOfClass("Model")
-            local pl = m and Players:GetPlayerFromCharacter(m)
-            silentLastTarget = pl and pl.DisplayName or (m and m.Name) or "?"
-        end)
-        return bestPart.Position + (vel * pred), bestPart
-    end
-    return nil
-end
---// MAGIC BULLETS: tus proyectiles doblan su vuelo hacia el objetivo (respeta FOV, equipo, hitchance).
--- Detecta piezas que NACEN cerca tuyo, en movimiento y alejándose (tus balas), e ignora el resto.
-local trackedBullets = {}
-local magicAcquired = 0 -- telemetría: balas con objetivo asignado
-workspace.DescendantAdded:Connect(function(inst)
-    if gui.Parent == nil then return end
-    if not settings.magicBulletsEnabled or settings.ghostMode then return end
-    if not inst or not inst:IsA("BasePart") then return end
-    if inst.Anchored then return end
-    local mr = myRoot()
-    if not mr then return end
-    local model = inst:FindFirstAncestorOfClass("Model")
-    if model and (Players:GetPlayerFromCharacter(model) or model == localPlayer.Character) then return end
-    local off = inst.Position - mr.Position
-    if off.Magnitude < 1 or off.Magnitude > 25 then return end -- nació pegado o lejos: no es tu bala
-    local vel = inst.AssemblyLinearVelocity
-    if vel.Magnitude < 20 then return end -- quieto: decoración del mapa, no bala
-    if vel.Unit:Dot(off.Unit) < 0.2 then return end -- viene HACIA ti: es bala enemiga, no tocar
-    local count = 0
-    for _ in pairs(trackedBullets) do count = count + 1 end
-    if count >= 40 then return end
-    -- hitchance una sola vez por bala: o vuela teledirigida o recta (parece legit)
-    local _, tgt = getSilentHitPos()
-    local realTgt = (tgt and tgt.Parent) and tgt or nil
-    trackedBullets[inst] = {t0 = tick(), target = realTgt}
-    if realTgt then magicAcquired = magicAcquired + 1 end
-    if realTgt and not settings.magicNotified then
-        settings.magicNotified = true
-        notify("Magic Bullets", "Objetivo adquirido: curvando balas.")
-    end
-end)
-RunService.Heartbeat:Connect(function()
-    if gui.Parent == nil then return end
-    if not settings.magicBulletsEnabled or settings.ghostMode then return end
-    local now = tick()
-    for part, info in pairs(trackedBullets) do
-        local tgt = info.target
-        if (not part) or (not part.Parent) or (now - info.t0) > 3 then
-            trackedBullets[part] = nil
-        elseif tgt and tgt.Parent then
-            local pred = settings.silentPrediction or 0.12
-            local aim = tgt.Position + (tgt.Velocity * pred)
-            if (aim - part.Position).Magnitude > 4 then
-                local sp = part.AssemblyLinearVelocity.Magnitude
-                if sp > 5 then
-                    -- conserva la velocidad original: SOLO dobla la dirección (natural y menos detectable)
-                    part.AssemblyLinearVelocity = (aim - part.Position).Unit * sp
-                    pcall(function() part.CFrame = CFrame.new(part.Position, aim) end)
-                end
-            end
-        end
-    end
-end)
---// SPY: registra qué manda tu arma (remotes/raycasts) en la consola F9. Solo LEE, indetectable.
--- Úsalo una vez por juego: dispara varias veces, abre F9 y pasa el log para adaptar el silent exacto.
-local spyHooked = false
-local spyLast, spyTotal = {}, 0
-function tryEnableSpy()
-    if spyHooked then notify("Spy", "Ya instalado. Dispara y abre la consola (F9).") return end
-    local ok, msg = pcall(function()
-        local hm = hookmetamethod
-        local gncm = getnamecallmethod
-        local chk = checkcaller
-        local nc = (newcclosure and newcclosure) or function(f) return f end
-        if not (hm and gncm) then error("executor sin hookmetamethod") end
-        local oldSpy
-        oldSpy = hm(game, "__namecall", nc(function(self, ...)
-            local method = gncm()
-            if settings.spyEnabled then
-                local s, r = pcall(chk)
-                if not (s and r) then
-                    if method == "FireServer" or method == "InvokeServer" or method == "Raycast"
-                    or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList"
-                    or method == "FindPartOnRayWithWhitelist" or method == "Fire" then
-                        local nm = "?"
-                        pcall(function() nm = self:GetFullName() end)
-                        local key = method .. "|" .. nm
-                        local now = tick()
-                        if (spyLast[key] or 0) + 2 < now and spyTotal < 60 then
-                            spyLast[key] = now
-                            spyTotal = spyTotal + 1
-                            local n = select("#", ...)
-                            local parts = {}
-                            for i = 1, n do
-                                local a = select(i, ...)
-                                local t = typeof(a)
-                                if t == "Vector3" then parts[#parts + 1] = "V3" .. tostring(a)
-                                elseif t == "CFrame" then parts[#parts + 1] = "CF" .. tostring(a.Position)
-                                elseif t == "Ray" then parts[#parts + 1] = "Ray" .. tostring(a.Origin)
-                                elseif t == "Instance" then
-                                    local an = "?"
-                                    pcall(function() an = a:GetFullName() end)
-                                    parts[#parts + 1] = "Inst:" .. an
-                                else parts[#parts + 1] = t end
-                            end
-                            dprint("[ZVOLT-SPY]", method, nm, "n=" .. n, table.concat(parts, " | "))
-                        end
-                    end
-                end
-            end
-            return oldSpy(self, ...)
-        end))
-        spyHooked = true
-    end)
-    if spyHooked then notify("Spy", "Instalado. Dispara varias veces y abre F9.")
-    else notify("Spy", "Sin soporte de hooks: " .. tostring(msg)) end
-end
-local spyProjLast = 0
-workspace.DescendantAdded:Connect(function(inst)
-    if gui.Parent == nil then return end
-    if not settings.spyEnabled then return end
-    if not inst or not inst:IsA("BasePart") or inst.Anchored then return end
-    local mr = myRoot()
-    if not mr then return end
-    if (inst.Position - mr.Position).Magnitude > 30 then return end
-    if inst.AssemblyLinearVelocity.Magnitude < 30 then return end
-    local now = tick()
-    if now - spyProjLast < 1 then return end
-    spyProjLast = now
-    local pn = "?"
-    pcall(function() pn = inst:GetFullName() end)
-    dprint("[ZVOLT-SPY] parte rápida cerca:", pn, "vel:", math.floor(inst.AssemblyLinearVelocity.Magnitude))
-end)
-function tryEnableSilentAim()
-    if silentHooked then return end
-    local ok, msg = pcall(function()
-        local hm = hookmetamethod
-        local gncm = getnamecallmethod
-        local chk = checkcaller
-        local nc = (newcclosure and newcclosure) or function(f) return f end
-        if not (hm and gncm) then error("executor sin hookmetamethod") end
-        -- Hook único __namecall: 1) raycasts del cliente 2) remotes con hitreg en servidor
-        -- Muchos juegos NUNCA hacen Raycast en el cliente: mandan FireServer(pos) y el server registra.
-        -- Por eso se escanea cualquier Vector3 cercano a tu punto de mira y se cambia por el enemigo.
-        local oldNC
-        oldNC = hm(game, "__namecall", nc(function(self, ...)
-            local method = gncm()
-            local n = select("#", ...)
-            local args = table.pack(...)
-            local function isExploitCall()
-                if chk then local s, r = pcall(chk) if s and r then return true end end
-                return false
-            end
-            if settings.silentAimEnabled and not silentBypass and not isExploitCall() then
-                if method == "Raycast" then
-                    local origin, dir = args[1], args[2]
-                    if origin and dir and typeof(origin) == "Vector3" and typeof(dir) == "Vector3" and dir.Magnitude > 0 then
-                        local hitPos = getSilentHitPos()
-                        if hitPos then
-                            local ndir = (hitPos - origin)
-                            if ndir.Magnitude > 0 then
-                                local nargs = {origin, ndir.Unit * dir.Magnitude}
-                                for i = 3, n do nargs[i] = args[i] end
-                                silentFlash = 0.2
-                                silentRedirects = silentRedirects + 1
-                                return oldNC(self, table.unpack(nargs, 1, math.max(n, 2)))
-                            end
-                        end
-                    end
-                elseif method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" or method == "FindPartOnRay" then
-                    local ray = args[1]
-                    if ray and typeof(ray) == "Ray" then
-                        local hitPos = getSilentHitPos()
-                        if hitPos then
-                            local ndir = (hitPos - ray.Origin)
-                            if ndir.Magnitude > 0 then
-                                local newRay = Ray.new(ray.Origin, ndir.Unit * ray.Direction.Magnitude)
-                                local nargs = {newRay}
-                                for i = 2, n do nargs[i] = args[i] end
-                                silentFlash = 0.2
-                                silentRedirects = silentRedirects + 1
-                                return oldNC(self, table.unpack(nargs, 1, math.max(n, 1)))
-                            end
-                        end
-                    end
-                elseif method == "FireServer" or method == "InvokeServer" then
-                    local hitPos = getSilentHitPos()
-                    if hitPos then
-                        -- 0) perfil del juego: reemplazo quirúrgico si conocemos su remote (video style)
-                        do
-                            local prof = SILENT_PROFILES[settings.silentGame]
-                            local rname = nil
-                            pcall(function() rname = self:GetFullName() end)
-                            if prof and prof.remote and rname == prof.remote then
-                                local o = args[prof.originIdx or 1]
-                                if o and typeof(o) == "Vector3" then
-                                    local nargs = {}
-                                    for i = 1, n do nargs[i] = args[i] end
-                                    local ch = false
-                                    if prof.dirIdx and nargs[prof.dirIdx] and typeof(nargs[prof.dirIdx]) == "Vector3" then
-                                        local nd = hitPos - o
-                                        if nd.Magnitude > 0.5 then
-                                            nargs[prof.dirIdx] = nd.Unit * nargs[prof.dirIdx].Magnitude
-                                            ch = true
-                                        end
-                                    end
-                                    if prof.hitIdx and nargs[prof.hitIdx] and typeof(nargs[prof.hitIdx]) == "Vector3" then
-                                        nargs[prof.hitIdx] = hitPos
-                                        ch = true
-                                    end
-                                    if ch then
-                                        silentFlash = 0.2
-                                        silentRedirects = silentRedirects + 1
-                                        return oldNC(self, table.unpack(nargs, 1, n))
-                                    end
-                                end
-                            end
-                        end
-                        silentBypass = true
-                        local aimRef = nil
-                        pcall(function() aimRef = mouse.Hit.Position end)
-                        silentBypass = false
-                        local lr = myRoot()
-                        if aimRef and lr then
-                            local nargs = {}
-                            for i = 1, n do nargs[i] = args[i] end
-                            local changed = false
-                            -- 1) pares (origen, dirección): el formato más común (el server hace el raycast).
-                            -- Antes solo se tocaban posiciones y a veces se cambiaba el ORIGEN por error.
-                            for i = 1, n - 1 do
-                                local a, b = nargs[i], nargs[i + 1]
-                                if typeof(a) == "Vector3" and typeof(b) == "Vector3" then
-                                    local bm = b.Magnitude
-                                    local isDir = (bm > 0.85 and bm < 1.15)
-                                        or (bm > 1 and (b - aimRef).Magnitude > 30)
-                                    if isDir and (a - lr.Position).Magnitude < 25 then
-                                        local nd = hitPos - a
-                                        if nd.Magnitude > 0.5 then
-                                            nargs[i + 1] = nd.Unit * bm
-                                            changed = true
-                                        end
-                                    end
-                                end
-                            end
-                            -- 2) Vector3 de POSICIÓN cerca de tu mira pero LEJOS de ti (nunca el origen).
-                            for i = 1, n do
-                                local a = nargs[i]
-                                if typeof(a) == "Vector3" then
-                                    local dAim = (a - aimRef).Magnitude
-                                    local dMe = (a - lr.Position).Magnitude
-                                    if dAim > 3 and dAim <= 30 and dMe > 20 then
-                                        nargs[i] = hitPos
-                                        changed = true
-                                    end
-                                end
-                            end
-                            if changed then
-                                silentFlash = 0.2
-                                silentRedirects = silentRedirects + 1
-                                return oldNC(self, table.unpack(nargs, 1, n))
-                            end
-                        end
-                    end
-                end
-            end
-            return oldNC(self, ...)
-        end))
-        -- 2) Hook Mouse.Hit / Mouse.Target (juegos que disparan con mouse.Hit)
-        local oldIdx
-        oldIdx = hm(game, "__index", nc(function(self, k)
-            if settings.silentAimEnabled and not silentBypass and (self == mouse) and (k == "Hit" or k == "Target") then
-                local s, r = pcall(checkcaller)
-                local exploitCall = (s and r)
-                if not exploitCall then
-                    local hitPos, part = getSilentHitPos()
-                    if hitPos then
-                        silentFlash = 0.2
-                        silentRedirects = silentRedirects + 1
-                        if k == "Hit" then return CFrame.new(hitPos) end
-                        if k == "Target" then return part end
-                    end
-                end
-            end
-            return oldIdx(self, k)
-        end))
-        silentHooked = true
-    end)
-    if silentHooked then
-        notify("Silent Aim 👻", "Hook instalado. Dispara cerca y pega solo.")
-    else
-        notify("Silent Aim ⚠️", "Tu executor no soporta hooks (" .. tostring(msg) .. "). Usa Aimbot normal.")
-    end
-end
+local mouse = localPlayer:GetMouse()
 
--- El aimbot V1 corre en el loop principal abajo (RenderStepped plano, como el original).
+--// Configuración General
+local settings = {
+	aimEnabled = false,
+	espEnabled = false,
+	espNamesEnabled = false,
+	espLinesEnabled = true,
+	espBoxEnabled = false,
+	espHealthEnabled = true,
+	ammoEnabled = false,
+	flyEnabled = false,
+	noclipEnabled = false,
+	speedEnabled = false,
+	jumpEnabled = false,
+	bhopEnabled = false,
+	hitboxEnabled = false,
+	spinEnabled = false,
+	ctrlClickTpEnabled = false,
+	-- NUEVAS OPCIONES AÑADIDAS
+	trollTrackEnabled = false,
+	trollOrbitEnabled = false,
+	wallbangEnabled = false,
+	targetPart = "Head",
+	hitboxSize = 5,
+	spinSpeed = 50,
+	smoothing = 0.3,
+	fovRadius = 140,
+	maxDistance = 1500,
+	flySpeed = 50,
+	customSpeed = 32,
+	customJump = 100,
+	selectedTpPlayer = nil
+}
 
--- Re-aplicación post-cámara: el juego reescribe su cámara cada frame; con esto
--- la última escritura siempre es la nuestra (Render + post-cámara + Heartbeat).
-prevCamType = nil
-function restoreCamType()
-    if prevCamType ~= nil then
-        pcall(function() camera.CameraType = prevCamType end)
-        prevCamType = nil
-    end
-end
-local function forceCamType()
-    if settings.aimScriptable and camera.CameraType ~= Enum.CameraType.Scriptable then
-        if prevCamType == nil then prevCamType = camera.CameraType end
-        pcall(function() camera.CameraType = Enum.CameraType.Scriptable end)
-    end
-end
-local function reapplyAim()
-    if not settings.aimEnabled then restoreCamType() return end
-    if not (settings.isAiming or settings.aimMobile or settings.aimAuto) then restoreCamType() return end
-    forceCamType()
-    local p = lastAimPart
-    if not (p and p.Parent) then return end
-    do
-        local sp, on = camera:WorldToViewportPoint(p.Position)
-        if on then
-            local ref = aimRefPoint()
-            if (Vector2.new(sp.X, sp.Y) - ref).Magnitude <= (settings.aimDeadzone or 0) then return end
-        end
-    end
-    local alphaV1 = settings.aimSnap and 1 or math.clamp(settings.smoothing / 100, 0.05, 1)
-    pcall(function()
-        camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, p.Position), alphaV1)
-    end)
-end
-pcall(function() RunService:UnbindFromRenderStep("ZV_Aimbot") end)
-pcall(function()
-    -- prioridad Last (2000): corre DESPUÉS de cualquier cámara del juego, justo antes del render
-    RunService:BindToRenderStep("ZV_Aimbot", Enum.RenderPriority.Last.Value, function() reapplyAim() end)
+--// Sistema de Keybinds (F1 a F6)
+local keybinds = {
+	aimbot = Enum.KeyCode.F1,
+	esp = Enum.KeyCode.F2,
+	noclip = Enum.KeyCode.F3,
+	fly = Enum.KeyCode.F4,
+	hitbox = Enum.KeyCode.F5,
+	spinbot = Enum.KeyCode.F6
+}
+
+local isAimingRightClick = false
+
+UserInputService.InputBegan:Connect(function(input, gp)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isAimingRightClick = true
+	end
 end)
 
---// Loops principales
-local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-local aimDeepLast = 0
-local lastAimPart = nil -- último objetivo: se re-aplica post-cámara aunque el juego la pise
-local espFrame, noclipLast, fbLastRefresh = 0, 0, 0 -- acumuladores de rendimiento
-RunService.RenderStepped:Connect(function(dt)
-    if gui.Parent == nil then return end
-    -- La cámara puede ser REEMPLAZADA por el juego (rondas/respawns). Si usamos la vieja,
-    -- todo da mal (pant:0) y escribimos en una cámara invisible. Re-leer cada frame lo arregla.
-    local freshCam = workspace.CurrentCamera
-    if freshCam then camera = freshCam end
-    if not camera then return end
-    -- red de seguridad: cualquier error aquí saldría a consola con "loadstring" (baneable)
-    local okLoop, errLoop = pcall(function()
-    -- FOV UI
-    local ml = aimRefPoint()
-    local wantFov = (settings.aimEnabled or settings.silentAimEnabled) and settings.showFov
-    fovFrame.Visible = wantFov
-    aimBtn.Visible = settings.aimEnabled and isTouch
-    flyUpBtn.Visible = settings.flyEnabled and isTouch
-    flyDownBtn.Visible = settings.flyEnabled and isTouch
-    if silentFlash > 0 then silentFlash = math.max(0, silentFlash - dt) end
-    if wantFov then
-        -- cada aim usa su propio radio: el círculo muestra el del aimbot, o el del silent si solo ese está activo
-        local fr = (settings.aimEnabled and settings.fovRadius) or settings.silentFov
-        fovFrame.Position = UDim2.new(0, ml.X, 0, ml.Y)
-        fovFrame.Size = UDim2.new(0, fr * 2, 0, fr * 2)
-        fovDot.Position = UDim2.new(0.5, 0, 0.5, 0)
-        if settings.fovRainbow then fovStroke.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
-        else fovStroke.Color = Accent() end
-        fovDot.BackgroundColor3 = fovStroke.Color
-        -- el círculo se engrosa un instante cuando el silent redirige un tiro (confirmación visual)
-        fovStroke.Thickness = (silentFlash > 0) and 3.5 or 1.6
-    end
-    -- ESP intercalado: mitad de jugadores por frame (se ve igual, cuesta la mitad)
-    espFrame = espFrame + 1
-    if settings.espEnabled then
-        for i, p in ipairs(Players:GetPlayers()) do
-            if p ~= localPlayer and (i + espFrame) % 2 == 0 then pcall(updateESP, p) end
-        end
-    else
-        for p, _ in pairs(espData) do clearESP(p) end
-    end
-    -- Aimbot estilo V1: RenderStepped plano, sin filtros extra. Fórmula del original que sí funciona.
-    -- El estado muestra el embudo (vivos -> con parte -> en pantalla) para ver qué filtra a todos.
-    do
-        local trigV1 = settings.isAiming or settings.aimMobile or settings.aimAuto
-        if not settings.aimEnabled then
-            aimStatus.Text = ""
-        elseif not trigV1 then
-            aimStatus.Text = discreetText("AIM: ON - mantén click derecho")
-            aimStatus.TextColor3 = COLOR_SUBTEXT
-        else
-            local ml2 = UserInputService:GetMouseLocation()
-            local lr2 = myRoot()
-            local bestPartV1, bestDV1, bestNameV1 = nil, settings.fovRadius, ""
-            local cAlive, cPart, cScreen, cBots = 0, 0, 0, 0
-            local function consider(model, label)
-                if not model then return end
-                -- BloxStrike y otros no usan Humanoid (vida custom): en bruto se apunta igual
-                if not settings.aimBrute then
-                    local humanoid = model:FindFirstChildOfClass("Humanoid")
-                    if not (humanoid and humanoid.Health > 0) then return end
-                end
-                cAlive = cAlive + 1
-                local tp = getAimPart(model, settings.targetPart)
-                if not (tp and lr2) then return end
-                cPart = cPart + 1
-                if (lr2.Position - tp.Position).Magnitude > settings.maxDistance then return end
-                local sp, on = camera:WorldToViewportPoint(tp.Position)
-                if not on then return end
-                cScreen = cScreen + 1
-                local d = (Vector2.new(sp.X, sp.Y) - ml2).Magnitude
-                if d <= settings.fovRadius and d < bestDV1 then
-                    bestDV1 = d
-                    bestPartV1 = tp
-                    bestNameV1 = label
-                end
-            end
-            if lr2 and localPlayer.Character then
-                for _, player in ipairs(Players:GetPlayers()) do
-                    if player ~= localPlayer and player.Character then
-                        consider(player.Character, player.DisplayName)
-                    end
-                end
-                if settings.aimBrute or (not bestPartV1 and settings.aimNpcs) then
-                    -- bots: modelos con humanoide que no son jugadores (top-level y dentro de carpetas)
-                    local function scanBots(c)
-                        for _, m in ipairs(c:GetChildren()) do
-                            if m:IsA("Model") and m ~= localPlayer.Character
-                            and not Players:GetPlayerFromCharacter(m) then
-                                local b0 = cAlive
-                                consider(m, m.Name)
-                                if cAlive > b0 then cBots = cBots + 1 end
-                            end
-                        end
-                    end
-                    scanBots(workspace)
-                    for _, c in ipairs(workspace:GetChildren()) do
-                        if c:IsA("Folder") then scanBots(c) end
-                    end
-                end
-            end
-            if bestPartV1 then
-                aimStatus.Text = discreetText("AIM: LOCK " .. tostring(bestNameV1))
-                aimStatus.TextColor3 = Color3.fromRGB(80, 255, 130)
-                lastAimPart = bestPartV1
-                -- zona muerta: si ya estás encima del objetivo no toca la cámara (tu mouse manda)
-                if bestDV1 > (settings.aimDeadzone or 0) then
-                    local alphaV1 = settings.aimSnap and 1 or math.clamp(settings.smoothing / 100, 0.05, 1)
-                    pcall(function()
-                        camera.CFrame = camera.CFrame:Lerp(
-                            CFrame.new(camera.CFrame.Position, bestPartV1.Position), alphaV1)
-                    end)
-                end
-            else
-                aimStatus.Text = discreetText(string.format("AIM: 0 FOV (vivos:%d bots:%d partes:%d pant:%d)",
-                    cAlive, cBots, cPart, cScreen))
-                aimStatus.TextColor3 = Color3.fromRGB(255, 200, 80)
-                lastAimPart = nil
-                if settings.aimDebug then
-                    local nowDbg = tick()
-                    if nowDbg - aimDeepLast > 2 then
-                        aimDeepLast = nowDbg
-                        local shown = 0
-                        local function dump(model, label)
-                            if shown >= 6 or not model then return end
-                            local hum = model:FindFirstChildOfClass("Humanoid")
-                            local hd = model:FindFirstChild("Head")
-                            local hrp = model:FindFirstChild("HumanoidRootPart")
-                            local anchor = hd or hrp
-                            local scr, on, dist = "?", false, -1
-                            if anchor then
-                                local sp2, on2 = camera:WorldToViewportPoint(anchor.Position)
-                                scr, on = string.format("%d,%d", sp2.X, sp2.Y), on2
-                                if lr2 then dist = math.floor((lr2.Position - anchor.Position).Magnitude) end
-                            end
-                            shown = shown + 1
-                            dprint(string.format("[ZVOLT-DEEP] %s | hum=%s hp=%s head=%s hrp=%s | pant=%s(%s) dist=%s",
-                                tostring(label), hum and "SI" or "NO", hum and tostring(math.floor(hum.Health)) or "-",
-                                hd and "SI" or "NO", hrp and "SI" or "NO",
-                                tostring(scr), tostring(on), tostring(dist)))
-                        end
-                        for _, player in ipairs(Players:GetPlayers()) do
-                            if player ~= localPlayer and player.Character then
-                                dump(player.Character, "JUG:" .. player.Name)
-                            end
-                        end
-                        if settings.aimNpcs then
-                            for _, m in ipairs(workspace:GetChildren()) do
-                                if m:IsA("Model") and m ~= localPlayer.Character
-                                and not Players:GetPlayerFromCharacter(m) then
-                                    dump(m, "NPC:" .. m.Name)
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    -- Telemetría silent/magic en pantalla + F9 (para diagnosticar qué no redirige)
-    do
-        local showS = settings.silentAimEnabled or settings.magicBulletsEnabled
-        if not showS then
-            silentStatus.Text = ""
-        else
-            local nowD = tick()
-            if nowD - diagLast > 0.25 then
-                diagLast = nowD
-                local tracked = 0
-                for _ in pairs(trackedBullets) do tracked = tracked + 1 end
-                local t = "HOOKS:" .. ((hookmetamethod ~= nil) and "OK" or "FALTA")
-                if settings.silentAimEnabled then
-                    t = t .. " | SILENT:" .. (silentLastTarget or "sin objetivo")
-                        .. " hits:" .. tostring(silentRedirects)
-                end
-                if settings.magicBulletsEnabled then
-                    t = t .. " | MAGIC: rastreadas:" .. tracked .. " dirigidas:" .. magicAcquired
-                end
-                silentStatus.Text = discreetText(t)
-                if nowD - diagF9Last > 4 then
-                    diagF9Last = nowD
-                    dprint(string.format(
-                        "[ZVOLT-DIAG] hooks=%s silent=%s magic=%s target=%s redirects=%d magic_tracked=%d magic_acquired=%d fov=%d/%d hitchance=%d perfil=%s",
-                        (hookmetamethod ~= nil) and "OK" or "FALTA",
-                        tostring(settings.silentAimEnabled),
-                        tostring(settings.magicBulletsEnabled),
-                        tostring(silentLastTarget or "-"),
-                        silentRedirects, tracked, magicAcquired,
-                        settings.fovRadius, settings.silentFov,
-                        settings.silentHitChance, tostring(settings.silentGame)))
-                end
-            end
-        end
-    end
-    -- Troll track / orbit / head sit / fling
-    local tp = settings.selectedTpPlayer
-    local r = myRoot() local h = myHum()
-    if tp and tp.Character and r and not settings.ghostMode and (settings.trollTrackEnabled or settings.trollOrbitEnabled or settings.headSitEnabled or settings.flingEnabled) then
-        local tr = targetRootOf(tp)
-        if tr then
-            if settings.trollTrackEnabled then
-                if h then h.PlatformStand = true end
-                local front = tr.Position + (tr.CFrame.LookVector * settings.trackDist) + Vector3.new(0, 0.5, 0)
-                r.CFrame = CFrame.new(front, tr.Position + Vector3.new(0, 1.5, 0))
-                r.Velocity = Vector3.zero r.AssemblyLinearVelocity = Vector3.zero
-            elseif settings.trollOrbitEnabled then
-                if h then h.PlatformStand = true end
-                orbitAngle = orbitAngle + dt * settings.orbitSpeed
-                local x = tr.Position.X + math.cos(orbitAngle) * settings.orbitRadius
-                local z = tr.Position.Z + math.sin(orbitAngle) * settings.orbitRadius
-                r.CFrame = CFrame.new(Vector3.new(x, tr.Position.Y + 2, z), tr.Position)
-                r.Velocity = Vector3.zero r.AssemblyLinearVelocity = Vector3.zero
-            elseif settings.headSitEnabled then
-                if h then h.PlatformStand = false h.Sit = true end
-                r.CFrame = tr.CFrame + Vector3.new(0, 2.2, 0)
-                r.Velocity = Vector3.zero
-            elseif settings.flingEnabled then
-                if h then h.PlatformStand = true end
-                orbitAngle = orbitAngle + dt * 25
-                r.CFrame = CFrame.new(tr.Position + Vector3.new(0, 1, 0)) * CFrame.Angles(0, orbitAngle, 0)
-                r.Velocity = Vector3.new(0, 60, 0) r.RotVelocity = Vector3.new(9999, 9999, 9999)
-            end
-        end
-    else
-        if h and not settings.flyEnabled and settings.spectating == false then
-            -- no forzar PlatformStand si no hay troll activo
-            if not (settings.trollTrackEnabled or settings.trollOrbitEnabled or settings.flingEnabled) then
-                -- lo maneja el loop de fly
-            end
-        end
-    end
-    -- spectate
-    if settings.spectateEnabled and tp and tp.Character then
-        local th = tp.Character:FindFirstChildOfClass("Humanoid")
-        if th then camera.CameraSubject = th end
-    end
-    -- spinbot
-    if settings.spinEnabled and not settings.ghostMode and r and not settings.trollTrackEnabled and not settings.trollOrbitEnabled and not settings.flingEnabled then
-        r.CFrame = r.CFrame * CFrame.Angles(0, math.rad(settings.spinSpeed), 0)
-    end
-    -- jerk anti-aim: yaw aleatorio + micro-jitter cada frame (rompe locks enemigos)
-    if settings.jerkEnabled and not settings.ghostMode and r
-    and not settings.flyEnabled and not settings.trollTrackEnabled
-    and not settings.trollOrbitEnabled and not settings.flingEnabled then
-        local pw = settings.jerkPower or 5
-        r.CFrame = r.CFrame * CFrame.Angles(0, math.rad(math.random(-pw * 18, pw * 18)), 0)
-        r.CFrame = r.CFrame + Vector3.new((math.random() - 0.5) * pw * 0.5, 0, (math.random() - 0.5) * pw * 0.5)
-        r.Velocity = Vector3.zero
-        r.RotVelocity = Vector3.zero
-    end
-    -- noclip a 10Hz (listar piezas cada frame es caro) + solo escribe si hace falta
-    if settings.noclipEnabled and localPlayer.Character and tick() - noclipLast > 0.1 then
-        noclipLast = tick()
-        for _, part in ipairs(localPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
-        end
-    end
-    -- NOTA: hitbox y wallbang se aplican en el loop lento (0.5s), no cada frame.
-    -- speed / jump / bhop (solo escribir si cambió el valor)
-    local ch = myHum()
-    if ch and not settings.ghostMode and not settings.trollTrackEnabled and not settings.trollOrbitEnabled then
-        local wantSpeed = settings.speedEnabled and settings.customSpeed or DEFAULT_SPEED
-        if ch.WalkSpeed ~= wantSpeed then ch.WalkSpeed = wantSpeed end
-        if settings.jumpEnabled and ch.JumpPower ~= settings.customJump then ch.JumpPower = settings.customJump ch.UseJumpPower = true end
-        if settings.bhopEnabled and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            if ch.FloorMaterial ~= Enum.Material.Air then ch:ChangeState(Enum.HumanoidStateType.Jumping) end
-        end
-    end
-    -- fullbright: se aplica al activar + refresco cada 2s (reescribirlo cada frame recalcula la luz y baja FPS)
-    -- anti-void
-    if settings.antiVoid and r and r.Position.Y < -60 then
-        r.CFrame = CFrame.new(0, 20, 0) r.Velocity = Vector3.zero
-    end
-    end)
-    if not okLoop then dprint("[sys] loop:", tostring(errLoop):sub(1, 90)) end
+UserInputService.InputEnded:Connect(function(input, gp)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isAimingRightClick = false
+	end
 end)
 
--- Fly (Heartbeat, compatible móvil con joystick)
-RunService.Heartbeat:Connect(function(dt)
-    if gui.Parent == nil then return end
-    local r = myRoot() local h = myHum()
-    if not r or not h then return end
-    local trollActive = settings.trollTrackEnabled or settings.trollOrbitEnabled or settings.flingEnabled
-    if settings.flyEnabled and not settings.ghostMode and not trollActive then
-        h.PlatformStand = true
-        local cf = camera.CFrame
-        local mv = Vector3.zero
-        local md = h.MoveDirection -- funciona con joystick móvil ✅
-        if md.Magnitude > 0.1 then
-            local fwd = cf.LookVector * Vector3.new(1, 0, 1)
-            local rgt = cf.RightVector * Vector3.new(1, 0, 1)
-            if fwd.Magnitude > 0 then fwd = fwd.Unit else fwd = Vector3.zero end
-            if rgt.Magnitude > 0 then rgt = rgt.Unit else rgt = Vector3.zero end
-            mv = mv + (fwd * -md.Z) + (rgt * md.X)
-            -- joystick arriba = avanzar; si mira arriba/abajo también vuela vertical un poco
-            mv = mv + Vector3.new(0, (-md.Z) * cf.LookVector.Y * 0.8, 0)
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then mv = mv + cf.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then mv = mv - cf.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then mv = mv - cf.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then mv = mv + cf.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then mv = mv - Vector3.new(0, 1, 0) end
-        if settings.flyUp then mv = mv + Vector3.new(0, 1, 0) end
-        if settings.flyDown then mv = mv - Vector3.new(0, 1, 0) end
-        if mv.Magnitude > 1 then mv = mv.Unit end
-        r.CFrame = r.CFrame + (mv * settings.flySpeed * dt)
-        r.Velocity = Vector3.zero r.AssemblyLinearVelocity = Vector3.zero r.RotVelocity = Vector3.zero
-    elseif not trollActive then
-        if h.PlatformStand and not settings.spectateEnabled then h.PlatformStand = false end
-    end
+--// Funcionalidad Ctrl + Click (Controlada por variable)
+UserInputService.InputBegan:Connect(function(input, gp)
+	if gp then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and settings.ctrlClickTpEnabled then
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
+			local rootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
+			if rootPart and mouse.Hit then
+				rootPart.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0, 3, 0))
+				rootPart.Velocity = Vector3.new(0, 0, 0)
+			end
+		end
+	end
 end)
 
--- Loops lentos (ammo / rapid / fps-ping)
-task.spawn(function()
-    local frames, last, fps = 0, tick(), 60
-    while true do
-        if gui.Parent == nil then break end
-        frames = frames + 1
-        local now = tick()
-        if now - last >= 1 then
-            fps = math.floor(frames / (now - last)) frames = 0 last = now
-            local ping = "--"
-            pcall(function()
-                local s = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()
-                ping = s
-            end)
-            statsLabel.Text = "FPS: " .. fps .. " • PING: " .. tostring(ping)
-        end
-        -- infinite ammo + rapid fire (cada 0.25s para no laggear)
-        if (settings.ammoEnabled or settings.rapidFire) and not settings.ghostMode then
-            local char = localPlayer.Character local bp = localPlayer:FindFirstChild("Backpack")
-            for _, cont in ipairs({char, bp}) do
-                if cont then
-                    for _, tool in ipairs(cont:GetChildren()) do
-                        if tool:IsA("Tool") then
-                            for _, v in ipairs(tool:GetDescendants()) do
-                                if v:IsA("NumberValue") or v:IsA("IntValue") then
-                                    local n = v.Name:lower()
-                                    if settings.ammoEnabled and (n:find("ammo") or n:find("clip") or n:find("bullet") or n:find("mag") or n:find("reserve")) then
-                                        v.Value = 999
-                                    end
-                                    if settings.rapidFire and (n:find("cooldown") or n:find("firerate") or n:find("rate") or n:find("delay") or n:find("reload")) then
-                                        v.Value = 0
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        -- hitbox + wallbang en loop LENTO (0.5s) y solo si cambió: mucho menos detectable
-        if settings.hitboxEnabled and not settings.ghostMode then
-            local want = Vector3.new(settings.hitboxSize, settings.hitboxSize, settings.hitboxSize)
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= localPlayer and p.Character then
-                    local part = p.Character:FindFirstChild("Head") or p.Character:FindFirstChild("HumanoidRootPart")
-                    if part and part:IsA("BasePart") then
-                        if not hitboxOriginals[part] then hitboxOriginals[part] = part.Size end
-                        if part.Size ~= want then part.Size = want end
-                        if part.Transparency ~= 0.6 then part.Transparency = 0.6 end
-                        if part.CanCollide then part.CanCollide = false end
-                    end
-                end
-            end
-        end
-        -- wallbang REAL = el silent ignora paredes (ver getSilentHitPos) + X-ray para verlos.
-        -- (El viejo loop de CanCollide no afectaba a las balas y se eliminó.)
-        -- refresco fullbright cada 2s por si el juego resetea la luz
-        if settings.fullbright and tick() - fbLastRefresh > 2 then
-            fbLastRefresh = tick()
-            Lighting.Brightness = 2 Lighting.ClockTime = 14 Lighting.FogEnd = 100000
-            Lighting.Ambient = Color3.fromRGB(255, 255, 255) Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-        end
-        task.wait(0.5)
-    end
-end)
+--// Estilo Visual Neón Zvolt
+local COLOR_BG = Color3.fromRGB(13, 13, 17)
+local COLOR_CARD = Color3.fromRGB(18, 18, 24)
+local COLOR_ACCENT = Color3.fromRGB(0, 242, 255)
+local COLOR_SUBTEXT = Color3.fromRGB(145, 145, 165)
+local COLOR_TEXT = Color3.fromRGB(245, 245, 250)
+local FONT_MAIN = Enum.Font.GothamMedium
+local FONT_TITLE = Enum.Font.FredokaOne
 
--- Triggerbot: dispara solo cuando un enemigo está bajo la mira (usa el FOV del aimbot).
-task.spawn(function()
-    local lastShot = 0
-    while true do
-        if gui.Parent == nil then break end
-        task.wait(0.05)
-        if settings.triggerbot and not settings.ghostMode then
-            local now = tick()
-            if now - lastShot > 0.3 then
-                local ref = aimRefPoint()
-                local found = false
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if found then break end
-                    local tAlive = (settings.aimBrute and p.Character ~= nil) or isAlive(p)
-                    if p ~= localPlayer and tAlive and not sameTeam(p, localPlayer) then
-                        local part = p.Character and getAimPart(p.Character, settings.targetPart)
-                        if part then
-                            local sp, on = camera:WorldToViewportPoint(part.Position)
-                            if on and (Vector2.new(sp.X, sp.Y) - ref).Magnitude <= math.max(14, settings.fovRadius * 0.3) then
-                                found = true
-                            end
-                        end
-                    end
-                end
-                if found then
-                    lastShot = now
-                    task.wait((settings.triggerDelay or 150) / 1000)
-                    local ok = pcall(function()
-                        if mouse1click then
-                            mouse1click()
-                        elseif mouse1press then
-                            mouse1press()
-                            task.wait(0.05)
-                            if mouse1release then mouse1release() end
-                        else
-                            local vim = game:GetService("VirtualInputManager")
-                            vim:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                            task.wait(0.05)
-                            vim:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-                        end
-                    end)
-                    if not ok and not settings.triggerWarned then
-                        settings.triggerWarned = true
-                        notify("Triggerbot", "Tu executor no soporta clicks.")
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- respawn: limpiar estados
-localPlayer.CharacterAdded:Connect(function()
-    if gui.Parent == nil then return end
-    task.wait(0.5)
-    table.clear(hitboxOriginals) orbitAngle = 0
-    for p, _ in pairs(espData) do clearESP(p) end
-    refreshPlayers()
-    pcall(function() camera.CameraSubject = myHum() end)
-end)
-
---// Intro animada
-tween(loadBar, TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 1, 0)})
-task.wait(1.35)
-tween(loader, TweenInfo.new(0.4), {BackgroundTransparency = 1})
-for _, v in ipairs(loader:GetDescendants()) do
-    if v:IsA("TextLabel") then tween(v, TweenInfo.new(0.4), {TextTransparency = 1}) end
-    if v:IsA("Frame") then tween(v, TweenInfo.new(0.4), {BackgroundTransparency = 1}) end
+local function sendNotification(title, text)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {
+			Title = title,
+			Text = text,
+			Duration = 1.5
+		})
+	end)
 end
-task.wait(0.4)
-loader:Destroy()
+
+--// GUI Principal
+local gui = Instance.new("ScreenGui")
+gui.Name = "ZvoltUIContainer_" .. math.random(11111, 99999)
+gui.ResetOnSpawn = false
+gui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+--// Círculo de FOV
+local fovFrame = Instance.new("Frame")
+fovFrame.Name = "FovIndicator"
+fovFrame.Size = UDim2.new(0, settings.fovRadius * 2, 0, settings.fovRadius * 2)
+fovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+fovFrame.BackgroundTransparency = 1
+fovFrame.Visible = false
+fovFrame.Parent = gui
+
+local fovStroke = Instance.new("UIStroke")
+fovStroke.Color = COLOR_ACCENT
+fovStroke.Thickness = 1.5
+fovStroke.Parent = fovFrame
+local fovCorner = Instance.new("UICorner")
+fovCorner.CornerRadius = UDim.new(1, 0)
+fovCorner.Parent = fovFrame
+
+--// PANEL PRINCIPAL
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 720, 0, 520)
+mainFrame.Position = UDim2.new(0.5, -360, 0.5, -260)
+mainFrame.BackgroundColor3 = COLOR_BG
 mainFrame.Visible = true
--- entrada elástica
-mainFrame.Size = UDim2.new(0, 0, 0, 0)
-mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-    Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
-})
-notify("ZVOLT V2.40 SRC", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-dprint("[ZVOLT V2.40 SRC] cargado OK - etiquetas discretas de fabrica")
-if hookmetamethod == nil then
-    notify("Executor limitado", "Sin hookmetamethod: Silent y SPY no funcionan aquí. Aimbot, ESP, Trigger, Hitbox y Magic sí.")
-    dprint("[ZVOLT] executor sin hookmetamethod: silent/SPY desactivados por hardware")
+mainFrame.Parent = gui
+
+local mfCorner = Instance.new("UICorner")
+mfCorner.CornerRadius = UDim.new(0, 10)
+mfCorner.Parent = mainFrame
+
+local mfStroke = Instance.new("UIStroke")
+mfStroke.Color = Color3.fromRGB(35, 35, 45)
+mfStroke.Thickness = 1.5
+mfStroke.Parent = mainFrame
+
+--// BARRA SUPERIOR
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, 0, 0, 55)
+topBar.BackgroundTransparency = 1
+topBar.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0, 120, 1, 0)
+titleLabel.Position = UDim2.new(0, 20, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = COLOR_ACCENT
+titleLabel.TextSize = 22
+titleLabel.Font = FONT_TITLE
+titleLabel.Text = "ZVOLT"
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = topBar
+
+local draggingMain, dragStartMain, startPosMain
+topBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		draggingMain = true
+		dragStartMain = input.Position
+		startPosMain = mainFrame.Position
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if draggingMain and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStartMain
+		mainFrame.Position = UDim2.new(startPosMain.X.Scale, startPosMain.X.Offset + delta.X, startPosMain.Y.Scale, startPosMain.Y.Offset + delta.Y)
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		draggingMain = false
+	end
+end)
+
+local tabsContainer = Instance.new("Frame")
+tabsContainer.Size = UDim2.new(0, 560, 1, 0)
+tabsContainer.Position = UDim2.new(0, 140, 0, 0)
+tabsContainer.BackgroundTransparency = 1
+tabsContainer.Parent = topBar
+
+local tcLayout = Instance.new("UIListLayout")
+tcLayout.FillDirection = Enum.FillDirection.Horizontal
+tcLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tcLayout.Padding = UDim.new(0, 8)
+tcLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+tcLayout.Parent = tabsContainer
+
+--// ÁREA DE CONTENIDO
+local contentArea = Instance.new("Frame")
+contentArea.Size = UDim2.new(1, 0, 1, -55)
+contentArea.Position = UDim2.new(0, 0, 0, 55)
+contentArea.BackgroundTransparency = 1
+contentArea.Parent = mainFrame
+
+local pages = {}
+local function createPage(name)
+	local page = Instance.new("ScrollingFrame")
+	page.Name = name
+	page.Size = UDim2.new(1, -20, 1, -20)
+	page.Position = UDim2.new(0, 10, 0, 10)
+	page.BackgroundTransparency = 1
+	page.Visible = false
+	page.CanvasSize = UDim2.new(0, 0, 0, 650)
+	page.ScrollBarThickness = 3
+	page.ScrollBarImageColor3 = COLOR_ACCENT
+	page.Parent = contentArea
+
+	pages[name] = page
+	return page
 end
 
-print("P3 OK")
+createPage("combat")
+createPage("visuals")
+createPage("weapon")
+createPage("teleport")
+createPage("troll")
+createPage("misc")
+createPage("keybinds")
+
+local function showPage(cat)
+	for name, page in pairs(pages) do
+		page.Visible = (name == cat)
+	end
+end
+
+local tabNames = {"combat", "visuals", "weapon", "teleport", "troll", "misc", "keybinds"}
+for i, name in ipairs(tabNames) do
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, 75, 0, 32)
+	btn.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+	btn.BackgroundTransparency = (name == "combat") and 0 or 1
+	btn.TextColor3 = (name == "combat") and COLOR_ACCENT or COLOR_SUBTEXT
+	btn.TextSize = 10
+	btn.Font = FONT_MAIN
+	btn.Text = name:upper()
+	btn.LayoutOrder = i
+	btn.Parent = tabsContainer
+
+	local bCorner = Instance.new("UICorner")
+	bCorner.CornerRadius = UDim.new(0, 6)
+	bCorner.Parent = btn
+
+	btn.MouseButton1Click:Connect(function()
+		for _, child in ipairs(tabsContainer:GetChildren()) do
+			if child:IsA("TextButton") then
+				child.TextColor3 = COLOR_SUBTEXT
+				child.BackgroundTransparency = 1
+			end
+		end
+		btn.TextColor3 = COLOR_ACCENT
+		btn.BackgroundTransparency = 0
+		showPage(name)
+	end)
+end
+
+showPage("combat")
+
+--// COMPONENTES FIJOS
+local function createCard(page, titleText, posX, posY, sizeX, sizeY)
+	local card = Instance.new("Frame")
+	card.Size = UDim2.new(0, sizeX, 0, sizeY)
+	card.Position = UDim2.new(0, posX, 0, posY)
+	card.BackgroundColor3 = COLOR_CARD
+	card.Parent = page
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = card
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(30, 30, 42)
+	stroke.Thickness = 1.2
+	stroke.Parent = card
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -24, 0, 25)
+	title.Position = UDim2.new(0, 12, 0, 10)
+	title.BackgroundTransparency = 1
+	title.TextColor3 = COLOR_TEXT
+	title.TextSize = 13
+	title.Font = FONT_TITLE
+	title.Text = titleText:upper()
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.Parent = card
+
+	local container = Instance.new("Frame")
+	container.Name = "Container"
+	container.Size = UDim2.new(1, -24, 1, -45)
+	container.Position = UDim2.new(0, 12, 0, 38)
+	container.BackgroundTransparency = 1
+	container.Parent = card
+
+	return container
+end
+
+local toggleStates = {}
+
+local function createToggle(parent, posY, text, callback, settingKey)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, 0, 0, 28)
+	btn.Position = UDim2.new(0, 0, 0, posY)
+	btn.BackgroundTransparency = 1
+	btn.TextColor3 = COLOR_SUBTEXT
+	btn.TextSize = 12
+	btn.Font = FONT_MAIN
+	btn.Text = text
+	btn.TextXAlignment = Enum.TextXAlignment.Left
+	btn.Parent = parent
+
+	local checkbox = Instance.new("Frame")
+	checkbox.Size = UDim2.new(0, 16, 0, 16)
+	checkbox.Position = UDim2.new(1, -16, 0.5, -8)
+	checkbox.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+	checkbox.Parent = btn
+
+	local cbStroke = Instance.new("UIStroke")
+	cbStroke.Color = Color3.fromRGB(50, 50, 70)
+	cbStroke.Thickness = 1.5
+	cbStroke.Parent = checkbox
+
+	local cc = Instance.new("UICorner")
+	cc.CornerRadius = UDim.new(0, 4)
+	cc.Parent = checkbox
+
+	local state = false
+	
+	local function updateVisuals(newState)
+		state = newState
+		btn.TextColor3 = state and COLOR_TEXT or COLOR_SUBTEXT
+		checkbox.BackgroundColor3 = state and COLOR_ACCENT or Color3.fromRGB(24, 24, 32)
+		cbStroke.Color = state and COLOR_ACCENT or Color3.fromRGB(50, 50, 70)
+		callback(state)
+	end
+
+	if settingKey then
+		toggleStates[settingKey] = {
+			Set = updateVisuals,
+			Get = function() return state end
+		}
+	end
+
+	btn.MouseButton1Click:Connect(function()
+		updateVisuals(not state)
+	end)
+	
+	return btn
+end
+
+local function createSlider(parent, posY, defaultVal, minVal, maxVal, titlePrefix, callback)
+	local container = Instance.new("Frame")
+	container.Size = UDim2.new(1, 0, 0, 42)
+	container.Position = UDim2.new(0, 0, 0, posY)
+	container.BackgroundTransparency = 1
+	container.Parent = parent
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 0, 18)
+	label.BackgroundTransparency = 1
+	label.TextColor3 = COLOR_SUBTEXT
+	label.TextSize = 12
+	label.Font = FONT_MAIN
+	label.Text = titlePrefix .. ": " .. defaultVal
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = container
+
+	local bar = Instance.new("Frame")
+	bar.Size = UDim2.new(1, 0, 0, 6)
+	bar.Position = UDim2.new(0, 0, 0, 24)
+	bar.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+	bar.Parent = container
+
+	local bc = Instance.new("UICorner")
+	bc.CornerRadius = UDim.new(1, 0)
+	bc.Parent = bar
+
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
+	fill.BackgroundColor3 = COLOR_ACCENT
+	fill.Parent = bar
+
+	local fc = Instance.new("UICorner")
+	fc.CornerRadius = UDim.new(1, 0)
+	fc.Parent = fill
+
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, 12, 0, 12)
+	btn.AnchorPoint = Vector2.new(0.5, 0.5)
+	btn.Position = UDim2.new(fill.Size.X.Scale, 0, 0.5, 0)
+	btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Text = ""
+	btn.Parent = bar
+
+	local btc = Instance.new("UICorner")
+	btc.CornerRadius = UDim.new(1, 0)
+	btc.Parent = btn
+
+	local dragging = false
+	btn.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true end
+	end)
+	bar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local mousePos = UserInputService:GetMouseLocation().X
+			local barPos = bar.AbsolutePosition.X
+			local barSize = bar.AbsoluteSize.X
+			local clampPos = math.clamp((mousePos - barPos) / barSize, 0, 1)
+			fill.Size = UDim2.new(clampPos, 0, 1, 0)
+			btn.Position = UDim2.new(clampPos, 0, 0.5, 0)
+			local calculatedVal = math.floor(minVal + (clampPos * (maxVal - minVal)))
+			label.Text = titlePrefix .. ": " .. calculatedVal
+			callback(calculatedVal)
+		end
+	end)
+end
+
+-- PESTAÑA: COMBAT
+local cardCombatGen = createCard(pages["combat"], "General", 10, 10, 680, 180)
+createToggle(cardCombatGen, 0, "Aimbot", function(v) settings.aimEnabled = v end, "aimbot")
+createToggle(cardCombatGen, 36, "Hitbox Extender", function(v) settings.hitboxEnabled = v end, "hitbox")
+createToggle(cardCombatGen, 72, "Wallbang (Atravesar paredes al disparar)", function(v) settings.wallbangEnabled = v end)
+createSlider(cardCombatGen, 108, settings.hitboxSize, 2, 20, "Hitbox Size", function(val) settings.hitboxSize = val end)
+
+local cardCombatFov = createCard(pages["combat"], "FOV Settings", 10, 200, 680, 85)
+createSlider(cardCombatFov, 0, settings.fovRadius, 50, 300, "FOV Radius", function(val)
+	settings.fovRadius = val
+	fovFrame.Size = UDim2.new(0, val * 2, 0, val * 2)
+end)
+
+local cardCombatSettings = createCard(pages["combat"], "Target Bone Selection", 10, 295, 680, 85)
+local partsList = {"Head", "HumanoidRootPart", "UpperTorso"}
+local currentPartIndex = 1
+local boneBtn = Instance.new("TextButton")
+boneBtn.Size = UDim2.new(1, 0, 0, 30)
+boneBtn.Position = UDim2.new(0, 0, 0, 0)
+boneBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+boneBtn.TextColor3 = COLOR_ACCENT
+boneBtn.TextSize = 12
+boneBtn.Font = FONT_MAIN
+boneBtn.Text = settings.targetPart
+boneBtn.Parent = cardCombatSettings
+local bbc = Instance.new("UICorner")
+bbc.CornerRadius = UDim.new(0, 6)
+bbc.Parent = boneBtn
+
+boneBtn.MouseButton1Click:Connect(function()
+	currentPartIndex = currentPartIndex + 1
+	if currentPartIndex > #partsList then currentPartIndex = 1 end
+	settings.targetPart = partsList[currentPartIndex]
+	boneBtn.Text = settings.targetPart
+end)
+
+-- PESTAÑA: VISUALS
+local cardVisuals = createCard(pages["visuals"], "ESP Settings", 10, 10, 680, 285)
+createToggle(cardVisuals, 0, "ESP Players", function(v) settings.espEnabled = v end, "esp")
+createToggle(cardVisuals, 34, "ESP Names", function(v) settings.espNamesEnabled = v end)
+createToggle(cardVisuals, 68, "ESP Lines", function(v) settings.espLinesEnabled = v end)
+createToggle(cardVisuals, 102, "ESP Box", function(v) settings.espBoxEnabled = v end)
+createToggle(cardVisuals, 136, "ESP Health Hearts", function(v) settings.espHealthEnabled = v end)
+createSlider(cardVisuals, 172, settings.maxDistance, 100, 3000, "Max Distance", function(val) settings.maxDistance = val end)
+
+-- PESTAÑA: WEAPON
+local cardWeapon = createCard(pages["weapon"], "Weapon Modifications", 10, 10, 680, 85)
+createToggle(cardWeapon, 0, "Infinite Ammo", function(v) settings.ammoEnabled = v end)
+
+-- PESTAÑA: TELEPORT
+local cardTp = createCard(pages["teleport"], "Player Teleporter List", 10, 10, 680, 345)
+
+local playerListContainer = Instance.new("ScrollingFrame")
+playerListContainer.Size = UDim2.new(1, 0, 0, 200)
+playerListContainer.Position = UDim2.new(0, 0, 0, 0)
+playerListContainer.BackgroundTransparency = 1
+playerListContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+playerListContainer.ScrollBarThickness = 3
+playerListContainer.Parent = cardTp
+
+local plLayout = Instance.new("UIListLayout")
+plLayout.SortOrder = Enum.SortOrder.LayoutOrder
+plLayout.Padding = UDim.new(0, 5)
+plLayout.Parent = playerListContainer
+
+local selectedLabel = Instance.new("TextLabel")
+selectedLabel.Size = UDim2.new(1, 0, 0, 26)
+selectedLabel.Position = UDim2.new(0, 0, 0, 210)
+selectedLabel.BackgroundTransparency = 1
+selectedLabel.TextColor3 = COLOR_SUBTEXT
+selectedLabel.TextSize = 12
+selectedLabel.Font = FONT_MAIN
+selectedLabel.Text = "Selected: None"
+selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
+selectedLabel.Parent = cardTp
+
+local tpActionBtn = Instance.new("TextButton")
+tpActionBtn.Size = UDim2.new(1, 0, 0, 34)
+tpActionBtn.Position = UDim2.new(0, 0, 0, 244)
+tpActionBtn.BackgroundColor3 = COLOR_ACCENT
+tpActionBtn.TextColor3 = COLOR_BG
+tpActionBtn.TextSize = 13
+tpActionBtn.Font = FONT_TITLE
+tpActionBtn.Text = "TELEPORT TO PLAYER"
+tpActionBtn.Parent = cardTp
+
+local tac = Instance.new("UICorner")
+tac.CornerRadius = UDim.new(0, 6)
+tac.Parent = tpActionBtn
+
+local function updatePlayerList()
+	for _, child in ipairs(playerListContainer:GetChildren()) do
+		if child:IsA("TextButton") then child:Destroy() end
+	end
+	local players = Players:GetPlayers()
+	playerListContainer.CanvasSize = UDim2.new(0, 0, 0, #players * 30)
+	
+	for i, p in ipairs(players) do
+		if p ~= localPlayer then
+			local pBtn = Instance.new("TextButton")
+			pBtn.Size = UDim2.new(1, 0, 0, 26)
+			pBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+			pBtn.TextColor3 = COLOR_TEXT
+			pBtn.TextSize = 12
+			pBtn.Font = FONT_MAIN
+			pBtn.Text = "  " .. p.Name
+			pBtn.TextXAlignment = Enum.TextXAlignment.Left
+			pBtn.LayoutOrder = i
+			pBtn.Parent = playerListContainer
+			
+			local pbc = Instance.new("UICorner")
+			pbc.CornerRadius = UDim.new(0, 5)
+			pbc.Parent = pBtn
+			
+			pBtn.MouseButton1Click:Connect(function()
+				settings.selectedTpPlayer = p
+				selectedLabel.Text = "Selected: " .. p.Name
+			end)
+		end
+	end
+end
+
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
+updatePlayerList()
+
+tpActionBtn.MouseButton1Click:Connect(function()
+	local targetPlayer = settings.selectedTpPlayer
+	if not targetPlayer or not targetPlayer.Character or not localPlayer.Character then return end
+	local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+	local myRoot = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if targetRoot and myRoot then
+		local startPos = myRoot.CFrame
+		local endPos = targetRoot.CFrame + Vector3.new(0, 3, 0)
+		for i = 1, 10 do
+			if not myRoot or not targetRoot then break end
+			myRoot.CFrame = startPos:Lerp(endPos, i / 10)
+			myRoot.Velocity = Vector3.new(0, 0, 0)
+			task.wait(0.01)
+		end
+	end
+end)
+
+-- PESTAÑA: TROLL
+local cardTroll = createCard(pages["troll"], "Troll Actions", 10, 10, 680, 120)
+createToggle(cardTroll, 0, "Tracker (Frente a su cara sin animación)", function(v) settings.trollTrackEnabled = v end)
+createToggle(cardTroll, 36, "Orbit (Girar alrededor del seleccionado)", function(v) settings.trollOrbitEnabled = v end)
+
+-- PESTAÑA: MISC
+local cardMisc = createCard(pages["misc"], "Movement & Misc", 10, 10, 680, 420)
+createToggle(cardMisc, 0, "Ctrl + Click TP", function(v) settings.ctrlClickTpEnabled = v end)
+createToggle(cardMisc, 36, "Fly Mode", function(v) settings.flyEnabled = v end, "fly")
+createSlider(cardMisc, 72, settings.flySpeed, 10, 150, "Fly Speed", function(val) settings.flySpeed = val end)
+createToggle(cardMisc, 118, "Custom Speed", function(v) settings.speedEnabled = v end, "speed")
+createSlider(cardMisc, 154, settings.customSpeed, 16, 120, "Speed Value", function(val) settings.customSpeed = val end)
+createToggle(cardMisc, 200, "Super Jump", function(v) settings.jumpEnabled = v end, "jump")
+createSlider(cardMisc, 236, settings.customJump, 50, 350, "Jump Power", function(val) settings.customJump = val end)
+createToggle(cardMisc, 282, "Noclip", function(v) settings.noclipEnabled = v end, "noclip")
+createToggle(cardMisc, 318, "Bhop", function(v) settings.bhopEnabled = v end)
+createToggle(cardMisc, 354, "Spinbot", function(v) settings.spinEnabled = v end, "spinbot")
+
+-- PESTAÑA: KEYBINDS
+local cardBinds = createCard(pages["keybinds"], "Keybind Configuration", 10, 10, 680, 260)
+
+local function createKeybindRow(parent, posY, labelName, bindKeyName)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 32)
+	row.Position = UDim2.new(0, 0, 0, posY)
+	row.BackgroundTransparency = 1
+	row.Parent = parent
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(0, 180, 1, 0)
+	label.BackgroundTransparency = 1
+	label.TextColor3 = COLOR_SUBTEXT
+	label.TextSize = 12
+	label.Font = FONT_MAIN
+	label.Text = labelName
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = row
+
+	local bindBtn = Instance.new("TextButton")
+	bindBtn.Size = UDim2.new(0, 110, 0, 26)
+	bindBtn.Position = UDim2.new(1, -110, 0.5, -13)
+	bindBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+	bindBtn.TextColor3 = COLOR_ACCENT
+	bindBtn.TextSize = 11
+	bindBtn.Font = FONT_MAIN
+	bindBtn.Text = keybinds[bindKeyName] and keybinds[bindKeyName].Name or "None"
+	bindBtn.Parent = row
+
+	local bbc = Instance.new("UICorner")
+	bbc.CornerRadius = UDim.new(0, 5)
+	bbc.Parent = bindBtn
+
+	local bbs = Instance.new("UIStroke")
+	bbs.Color = Color3.fromRGB(50, 50, 70)
+	bbs.Thickness = 1
+	bbs.Parent = bindBtn
+
+	local listening = false
+	bindBtn.MouseButton1Click:Connect(function()
+		listening = true
+		bindBtn.Text = "[ Press a Key... ]"
+		bindBtn.TextColor3 = Color3.fromRGB(255, 200, 0)
+	end)
+
+	UserInputService.InputBegan:Connect(function(input, gp)
+		if listening then
+			if input.UserInputType == Enum.UserInputType.Keyboard then
+				if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Delete then
+					keybinds[bindKeyName] = nil
+					bindBtn.Text = "None"
+				else
+					keybinds[bindKeyName] = input.KeyCode
+					bindBtn.Text = input.KeyCode.Name
+				end
+				listening = false
+				bindBtn.TextColor3 = COLOR_ACCENT
+			end
+		end
+	end)
+end
+
+createKeybindRow(cardBinds, 0, "Toggle Aimbot", "aimbot")
+createKeybindRow(cardBinds, 34, "Toggle ESP", "esp")
+createKeybindRow(cardBinds, 68, "Toggle Noclip", "noclip")
+createKeybindRow(cardBinds, 102, "Toggle Fly", "fly")
+createKeybindRow(cardBinds, 136, "Toggle Hitbox Ext.", "hitbox")
+createKeybindRow(cardBinds, 170, "Toggle Spinbot", "spinbot")
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		for feature, keyCode in pairs(keybinds) do
+			if input.KeyCode == keyCode and toggleStates[feature] then
+				local newState = not toggleStates[feature].Get()
+				toggleStates[feature].Set(newState)
+				sendNotification("Zvolt Keybind", feature:upper() .. ": " .. (newState and "ENABLED" or "DISABLED"))
+			end
+		end
+	end
+end)
+
+--// BOTÓN FLOTANTE MÓVIL
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ZvoltFloatingButton"
+toggleButton.Size = UDim2.new(0, 90, 0, 42)
+toggleButton.Position = UDim2.new(0, 40, 0, 100)
+toggleButton.BackgroundColor3 = COLOR_CARD
+toggleButton.Text = "ZVOLT"
+toggleButton.TextColor3 = COLOR_ACCENT
+toggleButton.TextSize = 14
+toggleButton.Font = FONT_TITLE
+toggleButton.ZIndex = 99999
+toggleButton.Parent = gui
+
+local tbc = Instance.new("UICorner")
+tbc.CornerRadius = UDim.new(0, 8)
+tbc.Parent = toggleButton
+
+local tbs = Instance.new("UIStroke")
+tbs.Color = COLOR_ACCENT
+tbs.Thickness = 1.5
+tbs.Parent = toggleButton
+
+local draggingBtn, dragStartBtn, startPosBtn
+toggleButton.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		draggingBtn = true
+		dragStartBtn = input.Position
+		startPosBtn = toggleButton.Position
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if draggingBtn and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStartBtn
+		toggleButton.Position = UDim2.new(startPosBtn.X.Scale, startPosBtn.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
+	end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		draggingBtn = false
+	end
+end)
+
+toggleButton.MouseButton1Click:Connect(function()
+	mainFrame.Visible = not mainFrame.Visible
+end)
+
+--// LÓGICA DE ESP CORREGIDA (ESP BOX FUNCIONAL)
+local espObjects = {}
+
+local function removeESP(player)
+	if espObjects[player] then
+		if espObjects[player].Highlight then espObjects[player].Highlight:Destroy() end
+		if espObjects[player].Billboard then espObjects[player].Billboard:Destroy() end
+		if espObjects[player].Line then espObjects[player].Line:Destroy() end
+		if espObjects[player].Box then espObjects[player].Box:Destroy() end
+		espObjects[player] = nil
+	end
+end
+
+local function updateESPForPlayer(player)
+	if player == localPlayer then return end
+	local char = player.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then
+		removeESP(player)
+		return
+	end
+
+	if settings.espEnabled then
+		if not espObjects[player] or espObjects[player].Character ~= char then
+			removeESP(player)
+
+			local hl = Instance.new("Highlight")
+			hl.Adornee = char
+			hl.FillColor = COLOR_ACCENT
+			hl.OutlineColor = COLOR_ACCENT
+			hl.FillTransparency = 0.75
+			hl.Parent = char
+
+			local bb = Instance.new("BillboardGui")
+			bb.Size = UDim2.new(0, 160, 0, 60)
+			bb.StudsOffset = Vector3.new(0, 3, 0)
+			bb.AlwaysOnTop = true
+
+			local txt = Instance.new("TextLabel")
+			txt.Size = UDim2.new(1, 0, 0.5, 0)
+			txt.BackgroundTransparency = 1
+			txt.TextColor3 = COLOR_TEXT
+			txt.TextStrokeTransparency = 0.3
+			txt.TextSize = 12
+			txt.Font = FONT_MAIN
+			txt.Parent = bb
+
+			local heartsTxt = Instance.new("TextLabel")
+			heartsTxt.Size = UDim2.new(1, 0, 0.5, 0)
+			heartsTxt.Position = UDim2.new(0, 0, 0.5, 0)
+			heartsTxt.BackgroundTransparency = 1
+			heartsTxt.TextColor3 = Color3.fromRGB(255, 60, 90)
+			heartsTxt.TextStrokeTransparency = 0.3
+			heartsTxt.TextSize = 13
+			heartsTxt.Font = FONT_MAIN
+			heartsTxt.Parent = bb
+
+			local line = Instance.new("Frame")
+			line.AnchorPoint = Vector2.new(0.5, 0.5)
+			line.BackgroundColor3 = COLOR_ACCENT
+			line.BorderSizePixel = 0
+			line.Visible = false
+			line.Parent = gui
+
+			local box = Instance.new("Frame")
+			box.BackgroundTransparency = 1
+			box.Visible = false
+			box.Parent = gui
+
+			local boxStroke = Instance.new("UIStroke")
+			boxStroke.Color = COLOR_ACCENT
+			boxStroke.Thickness = 1.5
+			boxStroke.Parent = box
+
+			bb.Parent = char
+			espObjects[player] = {Character = char, Highlight = hl, Billboard = bb, Text = txt, HeartsText = heartsTxt, Line = line, Box = box}
+		else
+			local data = espObjects[player]
+			local root = char:FindFirstChild("HumanoidRootPart")
+			local humanoid = char:FindFirstChildOfClass("Humanoid")
+			local localRoot = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
+			
+			if root and localRoot and humanoid then
+				local dist = math.floor((localRoot.Position - root.Position).Magnitude)
+				if dist <= settings.maxDistance then
+					local infoString = ""
+					if settings.espNamesEnabled then 
+						infoString = player.Name .. " " 
+					end
+					infoString = infoString .. "[" .. dist .. "m]"
+					data.Text.Text = infoString
+					data.Text.Visible = true
+
+					data.HeartsText.Visible = settings.espHealthEnabled
+					if settings.espHealthEnabled then
+						local hpPercent = math.clamp(humanoid.Health / (humanoid.MaxHealth > 0 and humanoid.MaxHealth or 100), 0, 1)
+						local totalHearts = 5
+						local activeHearts = math.ceil(hpPercent * totalHearts)
+						local heartsStr = ""
+						for h = 1, totalHearts do
+							if h <= activeHearts then
+								heartsStr = heartsStr .. "❤️"
+							else
+								heartsStr = heartsStr .. "🖤"
+							end
+						end
+						data.HeartsText.Text = heartsStr
+					end
+					data.Billboard.Enabled = true
+
+					if settings.espLinesEnabled then
+						local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
+						if onScreen then
+							local guiSize = camera.ViewportSize
+							local startVector = Vector2.new(guiSize.X / 2, guiSize.Y)
+							local endVector = Vector2.new(screenPos.X, screenPos.Y)
+							local distance = (endVector - startVector).Magnitude
+							
+							data.Line.Size = UDim2.new(0, 1, 0, distance)
+							data.Line.Position = UDim2.new(0, (startVector.X + endVector.X) / 2, 0, (startVector.Y + endVector.Y) / 2)
+							data.Line.Rotation = math.deg(math.atan2(endVector.Y - startVector.Y, endVector.X - startVector.X)) - 90
+							data.Line.Visible = true
+						else
+							data.Line.Visible = false
+						end
+					else
+						data.Line.Visible = false
+					end
+
+					-- Cálculo correcto de caja 2D adaptada al modelo
+					if settings.espBoxEnabled then
+						local head = char:FindFirstChild("Head")
+						local _, onScreen = camera:WorldToViewportPoint(root.Position)
+						
+						if onScreen and head then
+							local headPos = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+							local legPos = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
+							
+							local height = math.abs(headPos.Y - legPos.Y)
+							local width = height * 0.6
+							
+							data.Box.Size = UDim2.new(0, width, 0, height)
+							data.Box.Position = UDim2.new(0, headPos.X - (width / 2), 0, headPos.Y)
+							data.Box.Visible = true
+						else
+							data.Box.Visible = false
+						end
+					else
+						data.Box.Visible = false
+					end
+				else
+					data.Billboard.Enabled = false
+					data.Line.Visible = false
+					data.Box.Visible = false
+				end
+			end
+		end
+	else
+		removeESP(player)
+	end
+end
+
+Players.PlayerRemoving:Connect(function(player) removeESP(player) end)
+
+local function getClosestPlayerInFOV()
+	local closestPlayer = nil
+	local shortestDistance = settings.fovRadius
+	local mouseLocation = UserInputService:GetMouseLocation()
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= localPlayer and player.Character and localPlayer.Character then
+			local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+			local targetPart = player.Character:FindFirstChild(settings.targetPart) or player.Character:FindFirstChild("Head")
+			local localRoot = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+			if humanoid and humanoid.Health > 0 and targetPart and localRoot then
+				if (localRoot.Position - targetPart.Position).Magnitude <= settings.maxDistance then
+					local screenPoint, onScreen = camera:WorldToViewportPoint(targetPart.Position)
+					if onScreen then
+						local distCenter = (Vector2.new(screenPoint.X, screenPoint.Y) - mouseLocation).Magnitude
+						if distCenter <= settings.fovRadius and distCenter < shortestDistance then
+							shortestDistance = distCenter
+							closestPlayer = player
+						end
+					end
+				end
+			end
+		end
+	end
+	return closestPlayer
+end
+
+local orbitAngle = 0
+
+RunService.RenderStepped:Connect(function(dt)
+	if not camera or not localPlayer.Character then return end
+	
+	local mouseLocation = UserInputService:GetMouseLocation()
+	fovFrame.Position = UDim2.new(0, mouseLocation.X, 0, mouseLocation.Y)
+	fovFrame.Size = UDim2.new(0, settings.fovRadius * 2, 0, settings.fovRadius * 2)
+	fovFrame.Visible = settings.aimEnabled
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= localPlayer then updateESPForPlayer(player) end
+	end
+
+	-- LÓGICA DE WALLBANG
+	if settings.wallbangEnabled then
+		for _, player in ipairs(Players:GetPlayers()) do
+			if player ~= localPlayer and player.Character then
+				for _, part in ipairs(player.Character:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.CanCollide = false
+					end
+				end
+			end
+		end
+	end
+
+	-- LÓGICA DE TROLL: TRACKER (Frente exacto a la cara) Y ÓRBITA
+	local targetPlayer = settings.selectedTpPlayer
+	local rootPart = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
+	local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+
+	if targetPlayer and targetPlayer.Character and rootPart then
+		local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+		if targetRoot then
+			if settings.trollTrackEnabled then
+				if humanoid then humanoid.PlatformStand = true end
+				
+				-- Se coloca exactamente frente a su cara usando el LookVector positivo y orienta tu vista hacia él
+				local frontPosition = targetRoot.Position + (targetRoot.CFrame.LookVector * 2.5) + Vector3.new(0, 0.5, 0)
+				rootPart.CFrame = CFrame.new(frontPosition, targetRoot.Position)
+				
+				rootPart.Velocity = Vector3.new(0, 0, 0)
+				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+			elseif settings.trollOrbitEnabled then
+				if humanoid then humanoid.PlatformStand = true end
+				orbitAngle = orbitAngle + (dt * 3)
+				local radius = 6
+				local x = targetRoot.Position.X + math.cos(orbitAngle) * radius
+				local z = targetRoot.Position.Z + math.sin(orbitAngle) * radius
+				local targetPos = Vector3.new(x, targetRoot.Position.Y + 2, z)
+				
+				rootPart.CFrame = CFrame.new(targetPos, targetRoot.Position)
+				rootPart.Velocity = Vector3.new(0, 0, 0)
+				rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+			else
+				if humanoid and not settings.flyEnabled then humanoid.PlatformStand = false end
+			end
+		end
+	end
+
+	if settings.spinEnabled then
+		if rootPart and not settings.trollTrackEnabled and not settings.trollOrbitEnabled then 
+			rootPart.CFrame = rootPart.CFrame * CFrame.Angles(0, math.rad(settings.spinSpeed), 0) 
+		end
+	end
+
+	if settings.ammoEnabled then
+		local char = localPlayer.Character
+		local backpack = localPlayer:FindFirstChild("Backpack")
+		for _, container in ipairs({char, backpack}) do
+			if container then
+				for _, tool in ipairs(container:GetChildren()) do
+					if tool:IsA("Tool") then
+						for _, v in ipairs(tool:GetDescendants()) do
+							if v:IsA("NumberValue") or v:IsA("IntValue") then
+								local nameL = v.Name:lower()
+								if nameL:find("ammo") or nameL:find("clip") or nameL:find("bullet") or nameL:find("mag") then
+									v.Value = 999
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	if settings.aimEnabled and isAimingRightClick then
+		local targetPlayerFov = getClosestPlayerInFOV()
+		if targetPlayerFov and targetPlayerFov.Character then
+			local targetPart = targetPlayerFov.Character:FindFirstChild(settings.targetPart) or targetPlayerFov.Character:FindFirstChild("Head")
+			if targetPart then
+				pcall(function()
+					camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, targetPart.Position), settings.smoothing)
+				end)
+			end
+		end
+	end
+
+	if settings.noclipEnabled and localPlayer.Character then
+		local char = localPlayer.Character
+		for _, part in ipairs(char:GetDescendants()) do
+			if part:IsA("BasePart") then part.CanCollide = false end
+		end
+	end
+
+	if settings.hitboxEnabled then
+		for _, player in ipairs(Players:GetPlayers()) do
+			if player ~= localPlayer and player.Character then
+				local tp = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
+				if tp then
+					tp.Size = Vector3.new(settings.hitboxSize, settings.hitboxSize, settings.hitboxSize)
+					tp.Transparency = 0.6
+					tp.CanCollide = false
+				end
+			end
+		end
+	end
+
+	local currentHumanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if currentHumanoid and not settings.trollTrackEnabled and not settings.trollOrbitEnabled then
+		if settings.speedEnabled then
+			currentHumanoid.WalkSpeed = settings.customSpeed
+		end
+		if settings.jumpEnabled then
+			currentHumanoid.JumpPower = settings.customJump
+			currentHumanoid.UseJumpPower = true
+		end
+		if settings.bhopEnabled and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+			if currentHumanoid.FloorMaterial ~= Enum.Material.Air then currentHumanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+		end
+	end
+end)
+
+RunService.Heartbeat:Connect(function(dt)
+	if settings.flyEnabled and localPlayer.Character then
+		local rootPart = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+		local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if rootPart and humanoid then
+			humanoid.PlatformStand = true
+			local camCF = camera.CFrame
+			local mv = Vector3.new(0, 0, 0)
+			if UserInputService:IsKeyDown(Enum.KeyCode.W) then mv = mv + camCF.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.S) then mv = mv - camCF.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.A) then mv = mv - camCF.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.D) then mv = mv + camCF.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0, 1, 0) end
+			if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then mv = mv - Vector3.new(0, 1, 0) end
+			
+			rootPart.CFrame = rootPart.CFrame + (mv * settings.flySpeed * dt)
+			rootPart.Velocity = Vector3.new(0, 0, 0)
+			rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+		end
+	elseif localPlayer.Character and not settings.trollTrackEnabled and not settings.trollOrbitEnabled then
+		local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then humanoid.PlatformStand = false end
+	end
+end)
