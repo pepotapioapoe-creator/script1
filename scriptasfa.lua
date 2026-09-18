@@ -1,5 +1,5 @@
 --[[
-    ZVOLT HUB V2.35 NOLOG — FRESH EDITION
+    ZVOLT HUB V2.36 NOLEAK — FRESH EDITION
     UI moderna + más funciones + mejor rendimiento
     By Zvolt
 ]]
@@ -160,6 +160,17 @@ local function restoreDefaults()
     end
 end
 
+--// Anti-fugas: al re-ejecutar se matan loops e hilos de la instancia anterior.
+-- (Si no, cada execute duplica ESP/aim/fly y pelean entre sí.)
+if _G.__ZV_STOP then pcall(_G.__ZV_STOP) end
+local dead = false
+_G.__ZV_STOP = function() dead = true end
+if _G.__ZV_CONNS then
+    for _, c in ipairs(_G.__ZV_CONNS) do pcall(function() c:Disconnect() end) end
+end
+_G.__ZV_CONNS = {}
+local function ZCONN(c) table.insert(_G.__ZV_CONNS, c) return c end
+
 --// GUI raíz (nombres neutros: los anticheats escanean instancias con "hub", "aim", "esp", "zvolt", etc.)
 local function rndName()
     local s = ""
@@ -174,6 +185,15 @@ end
 local gui = Instance.new("ScreenGui")
 gui.Name = rndName()
 gui:SetAttribute("ZV2", true)
+-- limpia restos de ejecuciones viejas: su GUI y su ESP pegado a personajes
+for _, pl in ipairs(Players:GetPlayers()) do
+    local ch = pl.Character
+    if ch then
+        for _, d in ipairs(ch:GetDescendants()) do
+            pcall(function() if d:GetAttribute("ZV2") then d:Destroy() end end)
+        end
+    end
+end
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 -- STEALTH: siempre PlayerGui. gethui/CoreGui es una bandera clásica para los anticheats.
@@ -267,7 +287,7 @@ local loadGrad = Instance.new("UIGradient") loadGrad.Color = ColorSequence.new{C
 local loadSub = Instance.new("TextLabel")
 loadSub.Size = UDim2.new(1, 0, 0, 20) loadSub.Position = UDim2.new(0, 0, 0.42, 12)
 loadSub.BackgroundTransparency = 1 loadSub.Font = FONT_MAIN loadSub.TextSize = 12
-loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.35 NOLOG" loadSub.Parent = loader
+loadSub.TextColor3 = COLOR_SUBTEXT loadSub.Text = "FRESH EDITION • v2.36 NOLEAK" loadSub.Parent = loader
 local loadBarBg = Instance.new("Frame")
 loadBarBg.Size = UDim2.new(0, 240, 0, 5) loadBarBg.Position = UDim2.new(0.5, -120, 0.42, 42)
 loadBarBg.BackgroundColor3 = COLOR_CARD2 loadBarBg.Parent = loader corner(loadBarBg, 99)
@@ -310,7 +330,7 @@ local logoSub = Instance.new("TextLabel")
 logoSub.Size = UDim2.new(1, -24, 0, 16) logoSub.Position = UDim2.new(0, 12, 0, 46)
 logoSub.BackgroundTransparency = 1 logoSub.Font = FONT_MAIN logoSub.TextSize = 10
 logoSub.TextXAlignment = Enum.TextXAlignment.Left logoSub.TextColor3 = COLOR_SUBTEXT
-logoSub.Text = "FRESH • v2.35 NOLOG" logoSub.Parent = side
+logoSub.Text = "FRESH • v2.36 NOLEAK" logoSub.Parent = side
 
 local userLabel = Instance.new("TextLabel")
 userLabel.Size = UDim2.new(1, -24, 0, 18) userLabel.Position = UDim2.new(0, 12, 0, 68)
@@ -821,6 +841,7 @@ tTap = createToggle(m3, "Tap TP táctil", function(v)
 end)
 table.insert(riskyToggles, tTap)
 UserInputService.TouchTapInWorld:Connect(function(pos, processed)
+    if dead then return end
     if processed then return end
     if not settings.tapTp or settings.ghostMode then return end
     local r = myRoot()
@@ -841,6 +862,7 @@ createToggle(m3, "Freecam", function(v)
     if not v then restoreFreecam() end
 end)
 RunService.RenderStepped:Connect(function(dt)
+    if dead then return end
     if not settings.freecam then return end
     if camera.CameraType ~= Enum.CameraType.Scriptable then
         if freecamPrev == nil then freecamPrev = {camera.CameraSubject, camera.CameraType} end
@@ -898,7 +920,8 @@ local function refreshPlayers()
     plist.CanvasSize = UDim2.new(0, 0, 0, n * 33)
 end
 searchBox:GetPropertyChangedSignal("Text"):Connect(refreshPlayers)
-Players.PlayerAdded:Connect(refreshPlayers) Players.PlayerRemoving:Connect(refreshPlayers)
+Players.PlayerAdded:Connect(function() if not dead then refreshPlayers() end end)
+Players.PlayerRemoving:Connect(function() if not dead then refreshPlayers() end end)
 refreshPlayers()
 local btnRow = Instance.new("Frame") btnRow.Size = UDim2.new(1, 0, 0, 34) btnRow.BackgroundTransparency = 1 btnRow.Parent = t1
 local tpTweenBtn = Instance.new("TextButton")
@@ -935,6 +958,7 @@ end)
 table.insert(riskyToggles, tFollow)
 task.spawn(function()
     while true do
+        if dead then break end
         task.wait(0.5)
         if settings.tpFollow and not settings.ghostMode then
             local tp, mr = settings.selectedTpPlayer, myRoot()
@@ -1251,6 +1275,7 @@ aimBtn.InputEnded:Connect(function(i) aimingMobile = false aimBtn.BackgroundColo
 local aimingPC = false
 local isAimingRightClick = false
 UserInputService.InputBegan:Connect(function(inp, gp)
+    if dead then return end
     if inp.UserInputType == Enum.UserInputType.MouseButton2 then aimingPC = true isAimingRightClick = true end
     if gp then return end
     if inp.UserInputType == Enum.UserInputType.Keyboard then
@@ -1274,10 +1299,12 @@ UserInputService.InputBegan:Connect(function(inp, gp)
     end
 end)
 UserInputService.InputEnded:Connect(function(inp)
+    if dead then return end
     if inp.UserInputType == Enum.UserInputType.MouseButton2 then aimingPC = false isAimingRightClick = false end
 end)
 -- anti afk
 Players.LocalPlayer.Idled:Connect(function()
+    if dead then return end
     if settings.antiAfk then VirtualUser:CaptureController() VirtualUser:ClickButton2(Vector2.new()) end
 end)
 
@@ -1317,10 +1344,13 @@ local function buildESP(plr, char)
         hl.Adornee = char hl.FillTransparency = 0.7 hl.OutlineTransparency = 0
         hl.FillColor = espColor() hl.OutlineColor = espColor()
         hl.DepthMode = (settings.espXray ~= false) and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+        hl:SetAttribute("ZV2", true)
         hl.Parent = char objs.hl = hl
     end
     local bb = Instance.new("BillboardGui")
-    bb.Size = UDim2.new(0, 170, 0, 46) bb.StudsOffset = Vector3.new(0, 2.8, 0) bb.AlwaysOnTop = true bb.Parent = char
+    bb.Size = UDim2.new(0, 170, 0, 46) bb.StudsOffset = UDim2.new(0, 2.8, 0) bb.AlwaysOnTop = true
+    bb:SetAttribute("ZV2", true)
+    bb.Parent = char
     local name = Instance.new("TextLabel")
     name.Size = UDim2.new(1, 0, 0, 16) name.BackgroundTransparency = 1
     name.Font = FONT_BOLD name.TextSize = 12 name.TextColor3 = Color3.fromRGB(255,255,255)
@@ -1419,7 +1449,7 @@ local function updateESP(plr)
         else objs.box.Visible = false end
     else objs.box.Visible = false end
 end
-Players.PlayerRemoving:Connect(function(plr) clearESP(plr) espCharOf[plr] = nil end)
+Players.PlayerRemoving:Connect(function(plr) if not dead then clearESP(plr) espCharOf[plr] = nil end end)
 
 -- Punto de referencia del aim: cursor en PC, centro de pantalla en táctil (no hay cursor)
 local function aimRefPoint()
@@ -1537,6 +1567,7 @@ end
 local trackedBullets = {}
 local magicAcquired = 0 -- telemetría: balas con objetivo asignado
 workspace.DescendantAdded:Connect(function(inst)
+    if dead then return end
     if not settings.magicBulletsEnabled or settings.ghostMode then return end
     if not inst or not inst:IsA("BasePart") then return end
     if inst.Anchored then return end
@@ -1563,6 +1594,7 @@ workspace.DescendantAdded:Connect(function(inst)
     end
 end)
 RunService.Heartbeat:Connect(function()
+    if dead then return end
     if not settings.magicBulletsEnabled or settings.ghostMode then return end
     local now = tick()
     for part, info in pairs(trackedBullets) do
@@ -1639,6 +1671,7 @@ function tryEnableSpy()
 end
 local spyProjLast = 0
 workspace.DescendantAdded:Connect(function(inst)
+    if dead then return end
     if not settings.spyEnabled then return end
     if not inst or not inst:IsA("BasePart") or inst.Anchored then return end
     local mr = myRoot()
@@ -1859,6 +1892,7 @@ local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardE
 local aimDeepLast = 0
 local lastAimPart = nil -- último objetivo: se re-aplica post-cámara aunque el juego la pise
 RunService.RenderStepped:Connect(function(dt)
+    if dead then return end
     -- La cámara puede ser REEMPLAZADA por el juego (rondas/respawns). Si usamos la vieja,
     -- todo da mal (pant:0) y escribimos en una cámara invisible. Re-leer cada frame lo arregla.
     local freshCam = workspace.CurrentCamera
@@ -2129,6 +2163,7 @@ end)
 
 -- Fly (Heartbeat, compatible móvil con joystick)
 RunService.Heartbeat:Connect(function(dt)
+    if dead then return end
     local r = myRoot() local h = myHum()
     if not r or not h then return end
     local trollActive = settings.trollTrackEnabled or settings.trollOrbitEnabled or settings.flingEnabled
@@ -2166,6 +2201,7 @@ end)
 task.spawn(function()
     local frames, last, fps = 0, tick(), 60
     while true do
+        if dead then break end
         frames = frames + 1
         local now = tick()
         if now - last >= 1 then
@@ -2225,6 +2261,7 @@ end)
 task.spawn(function()
     local lastShot = 0
     while true do
+        if dead then break end
         task.wait(0.05)
         if settings.triggerbot and not settings.ghostMode then
             local now = tick()
@@ -2272,7 +2309,9 @@ task.spawn(function()
 end)
 
 -- respawn: limpiar estados
-localPlayer.CharacterAdded:Connect(function()    task.wait(0.5)
+localPlayer.CharacterAdded:Connect(function()
+    if dead then return end
+    task.wait(0.5)
     table.clear(hitboxOriginals) currentAimTarget = nil orbitAngle = 0
     for p, _ in pairs(espData) do clearESP(p) end
     refreshPlayers()
@@ -2296,8 +2335,8 @@ mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 740, 0, 500), Position = UDim2.new(0.5, -370, 0.5, -250)
 })
-notify("ZVOLT V2.35 NOLOG", "Cargado. Usa cuenta alt. RightShift = ocultar.")
-dprint("[ZVOLT V2.35 NOLOG] cargado OK - telemetria silent/magic")
+notify("ZVOLT V2.36 NOLEAK", "Cargado. Usa cuenta alt. RightShift = ocultar.")
+dprint("[ZVOLT V2.36 NOLEAK] cargado OK - sin fugas entre ejecuciones")
 if hookmetamethod == nil then
     notify("Executor limitado", "Sin hookmetamethod: Silent y SPY no funcionan aquí. Aimbot, ESP, Trigger, Hitbox y Magic sí.")
     dprint("[ZVOLT] executor sin hookmetamethod: silent/SPY desactivados por hardware")
