@@ -947,4 +947,5 @@ _G.ZV.discreetText = discreetText
 _G.ZV.applyDiscreet = applyDiscreet
 _G.ZV.keybinds = keybinds
 _G.ZV.origLighting = origLighting
+applyDiscreet()
 print("P1 OK")
