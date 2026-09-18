@@ -375,6 +375,12 @@ magicStatus.Size = UDim2.new(0, 380, 0, 18) magicStatus.Position = UDim2.new(0, 
 magicStatus.BackgroundTransparency = 1 magicStatus.Font = FONT_MAIN magicStatus.TextSize = 11
 magicStatus.TextColor3 = COLOR_SUBTEXT magicStatus.TextStrokeTransparency = 0.5
 magicStatus.Text = "" magicStatus.Parent = gui
+-- Estado del ESP en pantalla (diagnóstico en vivo: cuantos ve y por que filtra)
+local espStatus = Instance.new("TextLabel")
+espStatus.Size = UDim2.new(0, 380, 0, 18) espStatus.Position = UDim2.new(0, 10, 0, 50)
+espStatus.BackgroundTransparency = 1 espStatus.Font = FONT_MAIN espStatus.TextSize = 11
+espStatus.TextColor3 = COLOR_SUBTEXT espStatus.TextStrokeTransparency = 0.5
+espStatus.Text = "" espStatus.Parent = gui
 
 --// Pantalla de carga
 local loader = Instance.new("Frame")
@@ -1425,6 +1431,7 @@ local function buildESP(plr, char)
     local bb = Instance.new("BillboardGui")
     bb.Size = UDim2.new(0, 170, 0, 46) bb.StudsOffset = UDim2.new(0, 2.8, 0) bb.AlwaysOnTop = true
     bb:SetAttribute("ZV2", true)
+    bb.Adornee = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
     bb.Parent = char
     local name = Instance.new("TextLabel")
     name.Size = UDim2.new(1, 0, 0, 16) name.BackgroundTransparency = 1
@@ -1666,6 +1673,7 @@ local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardE
 local aimDeepLast = 0
 -- (lastAimPart vive arriba junto a orbitAngle; magic, V1 y reapply usan la misma variable)
 local espFrame, noclipLast, fbLastRefresh = 0, 0, 0 -- acumuladores de rendimiento
+local espDiagLast = 0 -- throttle del diagnóstico ESP en pantalla
 RunService.RenderStepped:Connect(function(dt)
     if dead then return end
     -- La cámara puede ser REEMPLAZADA por el juego (rondas/respawns). Si usamos la vieja,
@@ -1697,7 +1705,30 @@ RunService.RenderStepped:Connect(function(dt)
         for i, p in ipairs(Players:GetPlayers()) do
             if p ~= localPlayer and (i + espFrame) % 2 == 0 then pcall(updateESP, p) end
         end
+        -- diagnóstico en vivo: embudo del ESP (jugadores -> con root -> cerca)
+        local nowE = tick()
+        if nowE - espDiagLast > 0.5 then
+            espDiagLast = nowE
+            local eTot, eRoot, eNear = 0, 0, 0
+            local lrE = myRoot()
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= localPlayer then
+                    eTot = eTot + 1
+                    local ch = p.Character
+                    local rt = ch and ch:FindFirstChild("HumanoidRootPart")
+                    if rt then
+                        eRoot = eRoot + 1
+                        if lrE and (lrE.Position - rt.Position).Magnitude <= settings.maxDistance then
+                            eNear = eNear + 1
+                        end
+                    end
+                end
+            end
+            espStatus.Text = string.format("ESP: %d cerca (%d con root de %d juga)", eNear, eRoot, eTot)
+            espStatus.TextColor3 = (eNear > 0) and Color3.fromRGB(80, 255, 130) or Color3.fromRGB(255, 200, 80)
+        end
     else
+        espStatus.Text = ""
         for p, _ in pairs(espData) do clearESP(p) end
     end
     -- Aimbot estilo V1: RenderStepped plano, sin filtros extra. Fórmula del original que sí funciona.
@@ -2113,4 +2144,3 @@ tween(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.
 })
 notify("ZVOLT V2.43", "Cargado. Usa cuenta alt. RightShift = ocultar.")
 dprint("[sys] cargado OK")
-
