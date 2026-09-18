@@ -156,16 +156,8 @@ local function restoreDefaults()
     end
 end
 
---// Anti-fugas: al re-ejecutar se matan loops e hilos de la instancia anterior.
--- (Si no, cada execute duplica ESP/aim/fly y pelean entre sí.)
-if _G.__ZV_STOP then pcall(_G.__ZV_STOP) end
+-- (test A: sin _G)
 local dead = false
-_G.__ZV_STOP = function() dead = true end
-if _G.__ZV_CONNS then
-    for _, c in ipairs(_G.__ZV_CONNS) do pcall(function() c:Disconnect() end) end
-end
-_G.__ZV_CONNS = {}
-local function ZCONN(c) table.insert(_G.__ZV_CONNS, c) return c end
 
 --// GUI raíz (nombres neutros: los anticheats escanean instancias con "hub", "aim", "esp", "zvolt", etc.)
 local function rndName()
