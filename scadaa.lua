@@ -35,10 +35,11 @@ local settings = {
     aimBrute = false,
     aimScriptable = false,
     aimDeadzone = 6,
+    aimMaxDistance = 500,
     -- visuals
     espEnabled = false, espNames = true, espDistance = true, espHealthBar = true,
     espBox = true, espTracer = true, tracerOrigin = "Bottom", espChams = false, espTool = false,
-    espRainbow = false, maxDistance = 1500, skeleton = true,
+    espRainbow = false, maxDistance = 1500, skeleton = true, espCorpses = false,
     espXray = true,
     -- movement
     flyEnabled = false, flySpeed = 60, noclipEnabled = false, speedEnabled = false, customSpeed = 32,
@@ -62,6 +63,7 @@ local DEFAULT_SPEED, DEFAULT_JUMP = 16, 50
 local hitboxOriginals, currentAimTarget = {}, nil
 local orbitAngle, spectating = 0, false
 local lastAimPart = nil -- objetivo del aimbot V1; magic lo sigue (declarado arriba para que magic lo vea)
+local stickyPart, stickyModel, stickyName = nil, nil, "" -- fijar objetivo: no saltar entre 2
 
 --// Snapshot original para restaurar todo al salir (anti-ban: no dejar huellas)
 local origLighting = {}
@@ -761,6 +763,8 @@ tTrigger = createToggle(c1, "Triggerbot", function(v)
 end)
 table.insert(riskyToggles, tTrigger)
 createSlider(c1, "Retraso Trigger", settings.triggerDelay, 0, 500, function(v) settings.triggerDelay = v end)
+createSlider(c1, "Distancia aim", settings.aimMaxDistance, 50, 2000, function(v) settings.aimMaxDistance = v end)
+createToggle(c1, "Fijar objetivo", function(v) settings.stickyTarget = v end, nil, true)
 
 local c2 = createCard(pages["combat"], "⭕ FOV & Suavizado", 190)
 createSlider(c2, "Radio FOV", settings.fovRadius, 40, 400, function(v) settings.fovRadius = v end)
@@ -790,6 +794,7 @@ createToggle(v1, "Tracers", function(v) settings.espTracer = v end, nil, true)
 createToggle(v1, "Esqueleto", function(v) settings.skeleton = v end, nil, true)
 createToggle(v1, "Ver herramienta en mano 🔫", function(v) settings.espTool = v end)
 createToggle(v1, "Team Check", function(v) settings.teamCheck = v end)
+createToggle(v1, "Cadáveres", function(v) settings.espCorpses = v end)
 
 local v2 = createCard(pages["visuals"], "🎨 Estilo", 160)
 createDropdown(v2, "Lineas", {"Bottom", "Center", "Mouse"}, "Bottom", function(v) settings.tracerOrigin = v end)
@@ -1464,7 +1469,8 @@ local function updateESP(plr)
     local lr = myRoot()
     if not lr then return end
     local dist = math.floor((lr.Position - root.Position).Magnitude)
-    if dist > settings.maxDistance or (hum and hum.Health <= 0) then
+    local alive = hum ~= nil and hum.Health > 0
+    if dist > settings.maxDistance or (not alive and not settings.espCorpses) then
         objs.bb.Enabled = false objs.line.Visible = false objs.box.Visible = false
         hideSk(objs)
         return
@@ -1747,13 +1753,16 @@ RunService.RenderStepped:Connect(function(dt)
         local trigV1 = isAimingRightClick or aimingMobile or settings.aimAuto
         if not settings.aimEnabled then
             aimStatus.Text = ""
+            stickyPart, stickyModel, stickyName = nil, nil, ""
         elseif not trigV1 then
             aimStatus.Text = discreetText("AIM: ON - mantén click derecho")
             aimStatus.TextColor3 = COLOR_SUBTEXT
+            stickyPart, stickyModel, stickyName = nil, nil, ""
         else
             local ml2 = UserInputService:GetMouseLocation()
             local lr2 = myRoot()
             local bestPartV1, bestDV1, bestNameV1 = nil, settings.fovRadius, ""
+            local bestModelV1 = nil
             local cAlive, cPart, cScreen, cBots = 0, 0, 0, 0
             local function consider(model, label)
                 if not model then return end
@@ -1766,7 +1775,7 @@ RunService.RenderStepped:Connect(function(dt)
                 local tp = getAimPart(model, settings.targetPart)
                 if not (tp and lr2) then return end
                 cPart = cPart + 1
-                if (lr2.Position - tp.Position).Magnitude > settings.maxDistance then return end
+                if (lr2.Position - tp.Position).Magnitude > (settings.aimMaxDistance or 500) then return end
                 local sp, on = camera:WorldToViewportPoint(tp.Position)
                 if not on then return end
                 cScreen = cScreen + 1
@@ -1774,6 +1783,7 @@ RunService.RenderStepped:Connect(function(dt)
                 if d <= settings.fovRadius and d < bestDV1 then
                     bestDV1 = d
                     bestPartV1 = tp
+                    bestModelV1 = model
                     bestNameV1 = label
                 end
             end
@@ -1801,7 +1811,36 @@ RunService.RenderStepped:Connect(function(dt)
                     end
                 end
             end
+            -- fijar objetivo: si el anterior sigue válido (vivo, cerca, en FOV),
+            -- se queda con él en vez de saltar al otro
+            if settings.stickyTarget and stickyPart and stickyPart.Parent and lr2 then
+                local sAlive = true
+                if stickyModel then
+                    if stickyModel.Parent == nil then sAlive = false end
+                    local sh = stickyModel:FindFirstChildOfClass("Humanoid")
+                    if sh and sh.Health <= 0 then sAlive = false end
+                end
+                if sAlive then
+                    local ssp, son = camera:WorldToViewportPoint(stickyPart.Position)
+                    if son then
+                        local sd = (Vector2.new(ssp.X, ssp.Y) - ml2).Magnitude
+                        local sdist = (lr2.Position - stickyPart.Position).Magnitude
+                        if sd <= settings.fovRadius * 1.25 and sdist <= (settings.aimMaxDistance or 500) then
+                            bestPartV1 = stickyPart
+                            bestDV1 = sd
+                            bestNameV1 = stickyName
+                        else
+                            stickyPart, stickyModel, stickyName = nil, nil, ""
+                        end
+                    else
+                        stickyPart, stickyModel, stickyName = nil, nil, ""
+                    end
+                else
+                    stickyPart, stickyModel, stickyName = nil, nil, ""
+                end
+            end
             if bestPartV1 then
+                stickyPart, stickyModel, stickyName = bestPartV1, bestModelV1, bestNameV1
                 aimStatus.Text = discreetText("AIM: LOCK ") .. tostring(bestNameV1)
                 aimStatus.TextColor3 = Color3.fromRGB(80, 255, 130)
                 lastAimPart = bestPartV1
