@@ -94,12 +94,12 @@ local THEMES = {
     Green  = { main = Color3.fromRGB(60, 255, 170), second = Color3.fromRGB(0, 220, 255) },
     Sunset = { main = Color3.fromRGB(255, 180, 60), second = Color3.fromRGB(255, 80, 160) },
 }
-local COLOR_BG      = Color3.fromRGB(8, 9, 14)
-local COLOR_SIDE    = Color3.fromRGB(11, 12, 18)
-local COLOR_CARD    = Color3.fromRGB(14, 15, 22)
-local COLOR_CARD2   = Color3.fromRGB(19, 20, 29)
-local COLOR_TEXT    = Color3.fromRGB(240, 242, 250)
-local COLOR_SUBTEXT = Color3.fromRGB(130, 135, 155)
+local COLOR_BG      = Color3.fromRGB(10, 10, 16)
+local COLOR_SIDE    = Color3.fromRGB(13, 13, 22)
+local COLOR_CARD    = Color3.fromRGB(17, 17, 27)
+local COLOR_CARD2   = Color3.fromRGB(22, 22, 34)
+local COLOR_TEXT    = Color3.fromRGB(245, 245, 250)
+local COLOR_SUBTEXT = Color3.fromRGB(150, 150, 170)
 local FONT_MAIN  = Enum.Font.GothamMedium
 local FONT_BOLD  = Enum.Font.GothamBold
 local FONT_TITLE = Enum.Font.FredokaOne
@@ -351,30 +351,6 @@ local function dprint(...)
     end
 end
 
---// Mira X chica (reemplaza al punto del FOV y sigue al cursor siempre)
-local xcross = Instance.new("Frame")
-xcross.AnchorPoint = Vector2.new(0.5, 0.5)
-xcross.Size = UDim2.new(0, 18, 0, 18)
-xcross.BackgroundTransparency = 1 xcross.Parent = gui
-xcross.ZIndex = 50
-local function xbar(x, y, w, h, rot)
-    local b = Instance.new("Frame")
-    b.AnchorPoint = Vector2.new(0.5, 0.5)
-    b.Position = UDim2.new(0, x, 0, y)
-    b.Size = UDim2.new(0, w, 0, h)
-    b.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    b.BorderSizePixel = 0 b.Parent = xcross b.ZIndex = 51
-    b.Rotation = rot
-    local st = Instance.new("UIStroke") st.Color = Color3.fromRGB(0, 0, 0) st.Thickness = 0.8 st.Transparency = 0.4 st.Parent = b
-    return b
-end
-xbar(9, 3, 1.5, 7, 0)     -- arriba
-xbar(9, 15, 1.5, 7, 0)    -- abajo
-xbar(3, 9, 7, 1.5, 0)     -- izq
-xbar(15, 9, 7, 1.5, 0)    -- der
-local xdot = xbar(9, 9, 2, 2, 0)
-xdot.BackgroundTransparency = 0.15
-
 --// FOV + mira
 local fovFrame = Instance.new("Frame")
 fovFrame.Name = "vista" fovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -433,15 +409,6 @@ mainFrame.BackgroundColor3 = COLOR_BG
 mainFrame.Visible = false
 mainFrame.Parent = gui
 corner(mainFrame, 12) stroke(mainFrame, Color3.fromRGB(38, 38, 55), 1.2)
--- detalle: linea fina de acento arriba del panel
-local topAccent = Instance.new("Frame")
-topAccent.Size = UDim2.new(1, -24, 0, 2) topAccent.Position = UDim2.new(0, 12, 0, 0)
-topAccent.BackgroundColor3 = Accent() topAccent.Parent = mainFrame corner(topAccent, 99) TagAccent(topAccent)
-topAccent.ZIndex = 5
-local topGrad = Instance.new("UIGradient")
-topGrad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)), ColorSequenceKeypoint.new(1, Accent2())}
-topGrad.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0)}
-topGrad.Parent = topAccent
 -- sombra
 local shadow = Instance.new("ImageLabel")
 shadow.Size = UDim2.new(1, 40, 1, 40) shadow.Position = UDim2.new(0, -20, 0, -20)
@@ -623,7 +590,7 @@ local function createCard(page, titleText, height)
     card.AutomaticSize = Enum.AutomaticSize.Y
     card.BackgroundColor3 = COLOR_CARD card.Parent = page
     card.LayoutOrder = cardCount
-    corner(card, 10) stroke(card, Color3.fromRGB(30, 32, 46), 1)
+    corner(card, 10) stroke(card, Color3.fromRGB(32, 32, 48), 1)
     local pad = Instance.new("UIPadding") pad.PaddingLeft = UDim.new(0, 14) pad.PaddingRight = UDim.new(0, 14) pad.PaddingTop = UDim.new(0, 12) pad.PaddingBottom = UDim.new(0, 14) pad.Parent = card
     local layCard = Instance.new("UIListLayout") layCard.Padding = UDim.new(0, 6) layCard.SortOrder = Enum.SortOrder.LayoutOrder layCard.Parent = card
     local title = Instance.new("TextLabel")
@@ -632,9 +599,8 @@ local function createCard(page, titleText, height)
     title.TextXAlignment = Enum.TextXAlignment.Left title.Text = titleText:upper() title.Parent = card
     title.LayoutOrder = 1
     local accentBar = Instance.new("Frame")
-    accentBar.Size = UDim2.new(0, 26, 0, 2)
+    accentBar.Size = UDim2.new(0, 26, 0, 3)
     accentBar.BackgroundColor3 = Accent() accentBar.Parent = card corner(accentBar, 99) TagAccent(accentBar)
-    accentBar.BackgroundTransparency = 0.25
     accentBar.LayoutOrder = 2
     local box = Instance.new("Frame")
     box.Size = UDim2.new(1, 0, 0, 0)
@@ -661,10 +627,7 @@ local function createToggle(parent, text, callback, key, default)
     lbl.TextColor3 = default and COLOR_TEXT or COLOR_SUBTEXT lbl.Text = text lbl.Parent = row
     local track = Instance.new("Frame")
     track.Size = UDim2.new(0, 42, 0, 22) track.Position = UDim2.new(1, -42, 0.5, -11)
-    track.BackgroundColor3 = default and Accent() or Color3.fromRGB(26, 27, 38) track.Parent = row corner(track, 99)
-    local trackStroke = Instance.new("UIStroke")
-    trackStroke.Color = default and Accent() or Color3.fromRGB(45, 47, 62)
-    trackStroke.Thickness = 1 trackStroke.Transparency = 0.35 trackStroke.Parent = track
+    track.BackgroundColor3 = default and Accent() or Color3.fromRGB(30, 30, 44) track.Parent = row corner(track, 99)
     local knob = Instance.new("Frame")
     knob.Size = UDim2.new(0, 16, 0, 16) knob.Position = default and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
     knob.BackgroundColor3 = Color3.fromRGB(255,255,255) knob.Parent = track corner(knob, 99)
@@ -672,8 +635,7 @@ local function createToggle(parent, text, callback, key, default)
     local function set(v, silent)
         state = v
         lbl.TextColor3 = state and COLOR_TEXT or COLOR_SUBTEXT
-        trackStroke.Color = state and Accent() or Color3.fromRGB(45, 47, 62)
-        tween(track, TweenInfo.new(0.2), {BackgroundColor3 = state and Accent() or Color3.fromRGB(26, 27, 38)})
+        tween(track, TweenInfo.new(0.2), {BackgroundColor3 = state and Accent() or Color3.fromRGB(30, 30, 44)})
         tween(knob, TweenInfo.new(0.2, Enum.EasingStyle.Back), {Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)})
         if not silent then pcall(callback, state) end
     end
@@ -698,9 +660,7 @@ local function createSlider(parent, titlePrefix, defaultVal, minVal, maxVal, cal
     valBadge.TextColor3 = Accent() valBadge.Text = tostring(defaultVal) valBadge.Parent = box corner(valBadge, 6)
     local bar = Instance.new("TextButton")
     bar.Size = UDim2.new(1, 0, 0, 8) bar.Position = UDim2.new(0, 0, 0, 28)
-    bar.BackgroundColor3 = Color3.fromRGB(24, 25, 36) bar.Text = "" bar.AutoButtonColor = false bar.Parent = box corner(bar, 99)
-    local barStroke = Instance.new("UIStroke")
-    barStroke.Color = Color3.fromRGB(45, 47, 62) barStroke.Thickness = 1 barStroke.Transparency = 0.4 barStroke.Parent = bar
+    bar.BackgroundColor3 = Color3.fromRGB(28, 28, 42) bar.Text = "" bar.AutoButtonColor = false bar.Parent = box corner(bar, 99)
     local fill = Instance.new("Frame")
     local p0 = (defaultVal - minVal) / math.max(1, (maxVal - minVal))
     fill.Size = UDim2.new(p0, 0, 1, 0) fill.BackgroundColor3 = Accent() fill.Parent = bar corner(fill, 99) TagAccent(fill)
@@ -1103,52 +1063,6 @@ createButton(tr2, "👁️ Ver", function()
     end
 end, false)
 
---// Sin retroceso (por cámara, sin hooks): compensa el empuje del recoil frame a frame.
--- Guarda: mientras el aimbot/freecam/espectar muevan la cámara, no compensa.
-local recoilPrevCF = nil
-local recoilConn = nil
-local function startRecoilComp()
-    if recoilConn then return end
-    recoilPrevCF = nil
-    recoilConn = RunService.RenderStepped:Connect(function()
-        if dead then return end
-        if not settings.noRecoil or settings.ghostMode then recoilPrevCF = nil return end
-        local aimBusy = settings.aimEnabled and (isAimingRightClick or aimingMobile or settings.aimAuto)
-        if aimBusy or settings.freecam or settings.spectateEnabled then
-            recoilPrevCF = nil
-            return
-        end
-        local cf = workspace.CurrentCamera
-        if not cf then return end
-        local cur = cf.CFrame
-        if recoilPrevCF then
-            -- delta de pitch/yaw que hizo el juego en 1 frame
-            local prevLV, curLV = recoilPrevCF.LookVector, cur.LookVector
-            local dYaw = math.atan2(prevLV.X * curLV.Z - prevLV.Z * curLV.X, prevLV.X * curLV.X + prevLV.Z * curLV.Z)
-            local flatPrev = math.sqrt(prevLV.X * prevLV.X + prevLV.Z * prevLV.Z)
-            local flatCur = math.sqrt(curLV.X * curLV.X + curLV.Z * curLV.Z)
-            local prevPitch = math.atan2(prevLV.Y, math.max(flatPrev, 1e-6))
-            local curPitch = math.atan2(curLV.Y, math.max(flatCur, 1e-6))
-            local dPitch = curPitch - prevPitch
-            -- solo compensa saltos chicos (patrón recoil), ignora giros tuyos
-            if math.abs(dPitch) > 0.0001 and math.abs(dPitch) < 0.08 and math.abs(dYaw) < 0.08 then
-                pcall(function()
-                    local fix = CFrame.Angles(-dPitch, -dYaw, 0)
-                    cf.CFrame = cur:ToWorldSpace(fix)
-                end)
-            end
-        end
-        recoilPrevCF = cf.CFrame
-    end)
-end
-local function stopRecoilComp()
-    if recoilConn then
-        pcall(function() recoilConn:Disconnect() end)
-        recoilConn = nil
-    end
-    recoilPrevCF = nil
-end
-
 -- WEAPON
 local w1 = createCard(pages["weapon"], "🔫 Armas", 190)
 local tAmmo
@@ -1167,7 +1081,6 @@ local tRecoil
 tRecoil = createToggle(w1, "Sin retroceso", function(v)
     if v and ghostBlock() then tRecoil.Set(false) return end
     settings.noRecoil = v
-    if v then startRecoilComp() else stopRecoilComp() end
 end)
 table.insert(riskyToggles, tRecoil)
 local tMagic
@@ -1825,6 +1738,7 @@ local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardE
 local aimDeepLast = 0
 -- (lastAimPart vive arriba junto a orbitAngle; magic, V1 y reapply usan la misma variable)
 local espFrame, noclipLast, fbLastRefresh = 0, 0, 0 -- acumuladores de rendimiento
+local recoilPrevCF = nil -- snapshot para el sin retroceso
 local espDiagLast = 0 -- throttle del diagnóstico ESP en pantalla
 local espErr = nil -- último error de updateESP (el pcall lo tragaba en silencio)
 RunService.RenderStepped:Connect(function(dt)
@@ -1840,7 +1754,6 @@ RunService.RenderStepped:Connect(function(dt)
     local ml = aimRefPoint()
     local wantFov = settings.aimEnabled and settings.showFov
     fovFrame.Visible = wantFov
-    xcross.Position = UDim2.new(0, ml.X, 0, ml.Y)
     aimBtn.Visible = settings.aimEnabled and isTouch
     flyUpBtn.Visible = settings.flyEnabled and isTouch
     flyDownBtn.Visible = settings.flyEnabled and isTouch
@@ -1848,11 +1761,35 @@ RunService.RenderStepped:Connect(function(dt)
         fovFrame.Position = UDim2.new(0, ml.X, 0, ml.Y)
         fovFrame.Size = UDim2.new(0, settings.fovRadius * 2, 0, settings.fovRadius * 2)
         fovDot.Position = UDim2.new(0.5, 0, 0.5, 0)
-        fovDot.Visible = false -- reemplazado por la mira X
         if settings.fovRainbow then fovStroke.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
         else fovStroke.Color = Accent() end
         fovDot.BackgroundColor3 = fovStroke.Color
         fovStroke.Thickness = 1.6
+    end
+    -- Sin retroceso: compensa el empuje de camara del juego (deltas chicos entre frames)
+    do
+        if settings.noRecoil and not settings.ghostMode
+        and not (settings.aimEnabled and (isAimingRightClick or aimingMobile or settings.aimAuto))
+        and not settings.freecam and not settings.spectateEnabled then
+            local curCF = camera.CFrame
+            if recoilPrevCF then
+                local pLV, cLV = recoilPrevCF.LookVector, curCF.LookVector
+                local dx = pLV.X * cLV.Z - pLV.Z * cLV.X
+                local dot = pLV.X * cLV.X + pLV.Z * cLV.Z
+                local dYaw = math.atan2(dx, dot)
+                local fp = math.sqrt(pLV.X * pLV.X + pLV.Z * pLV.Z)
+                local fc = math.sqrt(cLV.X * cLV.X + cLV.Z * cLV.Z)
+                local dPitch = math.atan2(cLV.Y, math.max(fc, 1e-6)) - math.atan2(pLV.Y, math.max(fp, 1e-6))
+                if math.abs(dPitch) > 0.0001 and math.abs(dPitch) < 0.08 and math.abs(dYaw) < 0.08 then
+                    pcall(function()
+                        camera.CFrame = curCF * CFrame.Angles(-dPitch, -dYaw, 0)
+                    end)
+                end
+            end
+            recoilPrevCF = camera.CFrame
+        else
+            recoilPrevCF = nil
+        end
     end
     -- ESP intercalado: mitad de jugadores por frame (se ve igual, cuesta la mitad)
     espFrame = espFrame + 1
