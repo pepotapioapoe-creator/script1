@@ -52,7 +52,7 @@ local settings = {
     selectedTpPlayer = nil, savedPos = nil, tpFollow = false,
     -- weapon/world
     ammoEnabled = false, rapidFire = false, fullbright = false, fpsBoosted = false, antiAfk = false,
-    noShadows = false,
+    noShadows = false, noRecoil = false,
     -- ui
     uiToggleKey = Enum.KeyCode.RightShift, theme = "Cyan", uiTransparency = 0,
     ghostMode = false,
@@ -1103,6 +1103,52 @@ createButton(tr2, "👁️ Ver", function()
     end
 end, false)
 
+--// Sin retroceso (por cámara, sin hooks): compensa el empuje del recoil frame a frame.
+-- Guarda: mientras el aimbot/freecam/espectar muevan la cámara, no compensa.
+local recoilPrevCF = nil
+local recoilConn = nil
+local function startRecoilComp()
+    if recoilConn then return end
+    recoilPrevCF = nil
+    recoilConn = RunService.RenderStepped:Connect(function()
+        if dead then return end
+        if not settings.noRecoil or settings.ghostMode then recoilPrevCF = nil return end
+        local aimBusy = settings.aimEnabled and (isAimingRightClick or aimingMobile or settings.aimAuto)
+        if aimBusy or settings.freecam or settings.spectateEnabled then
+            recoilPrevCF = nil
+            return
+        end
+        local cf = workspace.CurrentCamera
+        if not cf then return end
+        local cur = cf.CFrame
+        if recoilPrevCF then
+            -- delta de pitch/yaw que hizo el juego en 1 frame
+            local prevLV, curLV = recoilPrevCF.LookVector, cur.LookVector
+            local dYaw = math.atan2(prevLV.X * curLV.Z - prevLV.Z * curLV.X, prevLV.X * curLV.X + prevLV.Z * curLV.Z)
+            local flatPrev = math.sqrt(prevLV.X * prevLV.X + prevLV.Z * prevLV.Z)
+            local flatCur = math.sqrt(curLV.X * curLV.X + curLV.Z * curLV.Z)
+            local prevPitch = math.atan2(prevLV.Y, math.max(flatPrev, 1e-6))
+            local curPitch = math.atan2(curLV.Y, math.max(flatCur, 1e-6))
+            local dPitch = curPitch - prevPitch
+            -- solo compensa saltos chicos (patrón recoil), ignora giros tuyos
+            if math.abs(dPitch) > 0.0001 and math.abs(dPitch) < 0.08 and math.abs(dYaw) < 0.08 then
+                pcall(function()
+                    local fix = CFrame.Angles(-dPitch, -dYaw, 0)
+                    cf.CFrame = cur:ToWorldSpace(fix)
+                end)
+            end
+        end
+        recoilPrevCF = cf.CFrame
+    end)
+end
+local function stopRecoilComp()
+    if recoilConn then
+        pcall(function() recoilConn:Disconnect() end)
+        recoilConn = nil
+    end
+    recoilPrevCF = nil
+end
+
 -- WEAPON
 local w1 = createCard(pages["weapon"], "🔫 Armas", 190)
 local tAmmo
@@ -1117,6 +1163,13 @@ tRapid = createToggle(w1, "Rapid Fire", function(v)
     settings.rapidFire = v
 end)
 table.insert(riskyToggles, tRapid)
+local tRecoil
+tRecoil = createToggle(w1, "Sin retroceso", function(v)
+    if v and ghostBlock() then tRecoil.Set(false) return end
+    settings.noRecoil = v
+    if v then startRecoilComp() else stopRecoilComp() end
+end)
+table.insert(riskyToggles, tRecoil)
 local tMagic
 tMagic = createToggle(w1, "Magic Bullets ⚠️", function(v)
     if v and ghostBlock() then tMagic.Set(false) return end
