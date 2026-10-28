@@ -380,27 +380,52 @@ end
 
 local function installHook()
     if hookInstalled or not HAS_HOOKS then return false end
-    -- Plan A: hook al Projectile._Update (bala en vuelo, hit 100% legitimo)
+    -- Plan A: hook al Projectile.new + _Update (solo balas PROPIAS, marcadas al nacer)
     projectileTable = findProjectileTable()
     if projectileTable and type(hookfunction) == "function" then
-        local okH, old = pcall(hookfunction, projectileTable._Update, function(self, dt)
-            if not dead and settings.silentEnabled and not self._sbAimed then
-                local tgt = pickTarget()
-                if tgt and tgt.Parent then
-                    local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
-                    local nd = aim - self.Position
-                    local mag = nd.Magnitude
-                    local sp = self.Velocity.Magnitude
-                    -- giro seguro: distancias y velocidades validas, sin NaN
-                    if mag > 1 and mag == mag and sp > 50 and sp == sp then
-                        local unit = nd / mag
-                        if unit.X == unit.X and unit.Y == unit.Y and unit.Z == unit.Z then
-                            self._sbAimed = true
-                            self.Velocity = unit * sp
-                            self.Direction = unit
+        -- 1) hookear new: marcar la bala como "mia" con el target ya fijado
+        local okN, oldN = pcall(hookfunction, projectileTable.new, function(cfg, ...)
+            local proj = oldN(cfg, ...)
+            pcall(function()
+                if not dead and settings.silentEnabled
+                and type(cfg) == "table" and typeof(cfg.Origin) == "Vector3" then
+                    -- solo balas que nacen cerca de MI (las mias nacen en mi arma)
+                    local lr = myRoot()
+                    if lr and (cfg.Origin - lr.Position).Magnitude < 25 then
+                        local tgt = pickTarget()
+                        if tgt and tgt.Parent then
+                            proj._sbTarget = tgt
                         end
                     end
                 end
+            end)
+            return proj
+        end)
+        if not (okN and oldN) then
+            return false
+        end
+        _G.__SB_OLDNEW = oldN
+        -- 2) hookear _Update: girar SOLO las balas marcadas, en su primer frame
+        local okH, old = pcall(hookfunction, projectileTable._Update, function(self, dt)
+            if not dead and settings.silentEnabled
+            and self._sbTarget and not self._sbAimed then
+                local tgt = self._sbTarget
+                pcall(function()
+                    if tgt and tgt.Parent then
+                        local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
+                        local nd = aim - self.Position
+                        local mag = nd.Magnitude
+                        local sp = self.Velocity.Magnitude
+                        if mag > 1 and mag == mag and sp > 50 and sp == sp then
+                            local unit = nd / mag
+                            if unit.X == unit.X and unit.Y == unit.Y and unit.Z == unit.Z then
+                                self._sbAimed = true
+                                self.Velocity = unit * sp
+                                self.Direction = unit
+                            end
+                        end
+                    end
+                end)
             end
             return old(self, dt)
         end)
@@ -481,6 +506,10 @@ local function installHook()
 end
 
 local function uninstallHook()
+    if _G.__SB_OLDNEW and projectileTable then
+        pcall(hookfunction, projectileTable.new, _G.__SB_OLDNEW)
+        _G.__SB_OLDNEW = nil
+    end
     if _G.__SB_OLDPROJ and projectileTable then
         pcall(hookfunction, projectileTable._Update, _G.__SB_OLDPROJ)
         _G.__SB_OLDPROJ = nil
