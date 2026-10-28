@@ -389,13 +389,15 @@ local function installHook()
                 if tgt and tgt.Parent then
                     local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
                     local nd = aim - self.Position
-                    if nd.Magnitude > 0.5 then
-                        -- marcar para no re-aimar cada frame (primer giro y listo)
-                        self._sbAimed = true
-                        local sp = self.Velocity.Magnitude
-                        if sp > 0 then
-                            self.Velocity = nd.Unit * sp
-                            self.Direction = nd.Unit
+                    local mag = nd.Magnitude
+                    local sp = self.Velocity.Magnitude
+                    -- giro seguro: distancias y velocidades validas, sin NaN
+                    if mag > 1 and mag == mag and sp > 50 and sp == sp then
+                        local unit = nd / mag
+                        if unit.X == unit.X and unit.Y == unit.Y and unit.Z == unit.Z then
+                            self._sbAimed = true
+                            self.Velocity = unit * sp
+                            self.Direction = unit
                         end
                     end
                 end
@@ -803,4 +805,3 @@ end))
 
 --// Mostrar
 mainFrame.Visible = true
-
