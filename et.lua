@@ -419,19 +419,25 @@ end
 
 --// Contenido
 local c1 = createCard("Silent")
-local tSilent
-tSilent = createToggle(c1, "Silent aim", function(v)
+local silentToggleRef = nil
+local silentReverting = false
+local function onSilentToggle(v)
+    if silentReverting then return end
     settings.silentEnabled = v
     if v then
-        if not installHook() then
+        local ok = installHook()
+        if not ok then
+            -- apagar el toggle sin re-entrar al callback
+            silentReverting = true
             settings.silentEnabled = false
-            tSilent.Set(false)
-            -- aviso en el estado
+            if silentToggleRef then pcall(function() silentToggleRef.Set(false) end) end
+            silentReverting = false
         end
     else
         uninstallHook()
     end
-end)
+end
+silentToggleRef = createToggle(c1, "Silent aim", onSilentToggle)
 createDropdown(c1, "Punto", {"Head", "HumanoidRootPart", "UpperTorso"}, "Head", function(v) settings.targetPart = v end)
 createSlider(c1, "FOV", settings.silentFov, 40, 500, function(v) settings.silentFov = v end)
 createSlider(c1, "Alcance", settings.silentRange, 50, 2000, function(v) settings.silentRange = v end)
