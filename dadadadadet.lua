@@ -315,62 +315,80 @@ local function pickTarget()
     return best
 end
 
---// ===== SILENT: hookfunction directo a Fire.FireServer =====
--- El decompilado muestra: Fire:FireServer(u132, Position_3, Unit)
--- args: [1]=token, [2]=origen, [3]=DIRECCION. Hookeamos la funcion del remote
--- y reescribimos la direccion hacia el target (tecnica del video).
-local fireRemoteCached = nil
-local function getFireRemote()
-    if fireRemoteCached and fireRemoteCached.Parent then return fireRemoteCached end
-    local ok, r = pcall(function()
+--// ===== SILENT: hook al Position:FireServer (el que REPORTA el daño) =====
+-- Flujo real del GunFramework (decompilado):
+--   1. Fire:FireServer(token, origen, dir) -> solo informa el disparo
+--   2. la bala vuela LOCAL con raycast
+--   3. al tocar un Humanoid: Position:FireServer(token, Id, parteGolpeada, u9.Direction, dmg, u100, tiempo)
+--   4. el SERVER aplica el daño según ese reporte
+-- => hookeamos Position.FireServer y reescribimos la parte golpeada por la
+--    cabeza del target (y su dirección). El server aplica el daño.
+local positionRemoteCached = nil
+local function getPositionRemote()
+    if positionRemoteCached and positionRemoteCached.Parent then return positionRemoteCached end
+    local ok, rem = pcall(function()
         return ReplicatedStorage:WaitForChild("Modules", 5)
-            :WaitForChild("GunFramework", 5):WaitForChild("Remotes", 5):WaitForChild("Fire", 5)
+            :WaitForChild("GunFramework", 5):WaitForChild("Remotes", 5)
     end)
-    if ok and r then fireRemoteCached = r return r end
+    if not (ok and rem) then return nil end
+    -- "Position" tiene nombre ofuscado a veces: GUID con guiones
+    local pos = rem:FindFirstChild("Position")
+    if not pos then
+        for _, v in ipairs(rem:GetChildren()) do
+            if v:IsA("RemoteEvent") and v.Name:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x%x$") then
+                pos = v break
+            end
+        end
+    end
+    if pos then positionRemoteCached = pos return pos end
     return nil
 end
 
 local function installHook()
     if hookInstalled or not HAS_HOOKS then return false end
-    local fr = getFireRemote()
-    if not fr then return false end
-    -- hookfunction sobre FireServer del remote (es una C closure hookeable)
-    local okH, old = pcall(hookfunction, fr.FireServer, function(self, ...)
-        local args = {...}
-        if not dead and settings.silentEnabled and self == fr then
-            -- [1]=token [2]=origen [3]=direccion
-            if typeof(args[3]) == "Vector3" and typeof(args[2]) == "Vector3" then
+    local pos = getPositionRemote()
+    if not pos then return false end
+    if type(hookfunction) == "function" then
+        local okH, old = pcall(hookfunction, pos.FireServer, function(self, ...)
+            local args = {...}
+            -- [1]=token [2]=Id [3]=parte golpeada [4]=direction [5]=dmg? [6]=token2 [7]=tiempo
+            if not dead and settings.silentEnabled and typeof(args[3]) == "Instance" then
                 local tgt = pickTarget()
                 if tgt and tgt.Parent then
-                    local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
-                    local nd = (aim - args[2]).Unit
-                    if nd.Magnitude > 0 then
-                        return old(self, args[1], args[2], nd)
+                    -- reescribir la parte golpeada por la parte del target
+                    args[3] = tgt
+                    -- reescribir la dirección para que apunte al target (algunos servers la chequean)
+                    if typeof(args[4]) == "Vector3" then
+                        local origin = args[3].Position
+                        local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
+                        args[4] = (aim - origin).Unit
                     end
+                    return old(self, table.unpack(args, 1, select("#", ...)))
                 end
             end
+            return old(self, ...)
+        end)
+        if okH and old then
+            _G.__SB_OLDPOS = old
+            hookedFire = old
+            hookInstalled = true
+            return true
         end
-        return old(self, ...)
-    end)
-    if okH and old then
-        _G.__SB_OLDFIRE = old
-        hookedFire = old
-        hookInstalled = true
-        return true
     end
-    -- Fallback: hookmetamethod __namecall al mismo remote
+    -- Fallback: hookmetamethod
     if type(hookmetamethod) == "function" then
         local okM, oldM = pcall(hookmetamethod, game, "__namecall", function(self, ...)
-            if not dead and settings.silentEnabled and self == fr and getnamecallmethod() == "FireServer" then
+            if not dead and settings.silentEnabled and self == pos and getnamecallmethod() == "FireServer" then
                 local args = {...}
-                if typeof(args[3]) == "Vector3" and typeof(args[2]) == "Vector3" then
+                if typeof(args[3]) == "Instance" then
                     local tgt = pickTarget()
                     if tgt and tgt.Parent then
-                        local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
-                        local nd = (aim - args[2]).Unit
-                        if nd.Magnitude > 0 then
-                            return _G.__SB_OLDNC(self, args[1], args[2], nd)
+                        args[3] = tgt
+                        if typeof(args[4]) == "Vector3" then
+                            local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
+                            args[4] = (aim - args[3].Position).Unit
                         end
+                        return _G.__SB_OLDNC(self, table.unpack(args, 1, select("#", ...)))
                     end
                 end
             end
@@ -387,9 +405,9 @@ local function installHook()
 end
 
 local function uninstallHook()
-    if _G.__SB_OLDFIRE and getFireRemote() then
-        pcall(hookfunction, getFireRemote().FireServer, _G.__SB_OLDFIRE)
-        _G.__SB_OLDFIRE = nil
+    if _G.__SB_OLDPOS and getPositionRemote() then
+        pcall(hookfunction, getPositionRemote().FireServer, _G.__SB_OLDPOS)
+        _G.__SB_OLDPOS = nil
     end
     if _G.__SB_OLDNC then
         pcall(hookmetamethod, game, "__namecall", _G.__SB_OLDNC)
@@ -681,7 +699,7 @@ SCONN(RunService.RenderStepped:Connect(function(dt)
                         end
                         local tgt = pickTarget()
                         if tgt then
-                            silentStatus.Text = string.format("OBJETIVO: %s (%dm del mouse)", tostring(tgt.Parent and tgt.Parent.Name or "?"), math.floor(nearestD))
+                            silentStatus.Text = string.format("OBJETIVO: %s (%dm del mouse) | listo, pegale a CUALQUIER cosa", tostring(tgt.Parent and tgt.Parent.Name or "?"), math.floor(nearestD))
                             silentStatus.TextColor3 = Color3.fromRGB(80, 255, 130)
                         else
                             silentStatus.Text = string.format("SIN OBJETIVO | vivos:%d cerca:%d pant:%d fov:%d", cAlive, cRange, cScreen, cFov)
