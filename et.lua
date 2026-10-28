@@ -635,22 +635,58 @@ SCONN(RunService.RenderStepped:Connect(function(dt)
                 silentStatus.Text = ""
             end
         end
-        -- estado del silent
+        -- estado del silent: diagnsitico detallado
         if settings.silentEnabled then
             local nowS = tick()
-            if nowS - silentDiagLast > 0.5 then
+            if nowS - silentDiagLast > 0.25 then
                 silentDiagLast = nowS
                 if not hookInstalled then
                     silentStatus.Text = "Silent: no hay hooks en este executor (usar Real)"
                     silentStatus.TextColor3 = Color3.fromRGB(255, 110, 120)
                 else
-                    local tgt = pickTarget()
-                    if tgt then
-                        silentStatus.Text = "Silent listo ● " .. tostring(tgt.Parent and tgt.Parent.Name or "?")
-                        silentStatus.TextColor3 = Color3.fromRGB(80, 255, 130)
+                    -- contar candidatos y ver que encuentra el picker
+                    local lr = myRoot()
+                    if not lr then
+                        silentStatus.Text = "Silent: sin personaje (respawnea)"
+                        silentStatus.TextColor3 = Color3.fromRGB(255, 200, 80)
                     else
-                        silentStatus.Text = "Silent listo (sin objetivo en FOV)"
-                        silentStatus.TextColor3 = COLOR_SUBTEXT
+                        local ml = UserInputService:GetMouseLocation()
+                        local cAlive, cRange, cScreen, cFov = 0, 0, 0, 0
+                        local nearestName, nearestD = "?", math.huge
+                        for _, p in ipairs(Players:GetPlayers()) do
+                            if p ~= localPlayer and p.Character then
+                                local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                                if hum and hum.Health > 0 then
+                                    cAlive = cAlive + 1
+                                    local tp = p.Character:FindFirstChild(settings.targetPart)
+                                        or p.Character:FindFirstChild("Head")
+                                        or p.Character:FindFirstChild("HumanoidRootPart")
+                                    if tp then
+                                        local dp = (lr.Position - tp.Position).Magnitude
+                                        if dp <= (settings.silentRange or 800) then
+                                            cRange = cRange + 1
+                                            local sp, on = camera:WorldToViewportPoint(tp.Position)
+                                            if on then
+                                                cScreen = cScreen + 1
+                                                local d = (Vector2.new(sp.X, sp.Y) - ml).Magnitude
+                                                if d < nearestD then nearestD = d nearestName = p.DisplayName end
+                                                if d <= (settings.silentFov or 150) then
+                                                    cFov = cFov + 1
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                        local tgt = pickTarget()
+                        if tgt then
+                            silentStatus.Text = string.format("OBJETIVO: %s (%dm del mouse)", tostring(tgt.Parent and tgt.Parent.Name or "?"), math.floor(nearestD))
+                            silentStatus.TextColor3 = Color3.fromRGB(80, 255, 130)
+                        else
+                            silentStatus.Text = string.format("SIN OBJETIVO | vivos:%d cerca:%d pant:%d fov:%d", cAlive, cRange, cScreen, cFov)
+                            silentStatus.TextColor3 = Color3.fromRGB(255, 200, 80)
+                        end
                     end
                 end
             end
