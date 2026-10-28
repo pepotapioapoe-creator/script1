@@ -27,7 +27,7 @@ local function SCONN(c) table.insert(_G.__SB_CONNS, c) return c end
 if _G.__SB_GUI then pcall(function() _G.__SB_GUI:Destroy() end) _G.__SB_GUI = nil end
 
 --// Requerimientos del executor
-local HAS_HOOKS = type(hookfunction) == "function" and type(getgc) == "function"
+local HAS_HOOKS = type(hookfunction) == "function" and (type(hookmetamethod) == "function" or type(getgc) == "function")
 local HAS_GETUPVALS = type(debug) == "table" and type(debug.getupvalue) == "function" or type(getupvalue) == "function"
 
 --// Settings
@@ -315,89 +315,82 @@ local function pickTarget()
     return best
 end
 
---// ===== SILENT POR HOOKFUNCTION AL BULLET HANDLER (estilo video) =====
--- El GunClient crea Projectile con {Origin=..., Direction=...} en FireBullet.
--- Buscamos en el GC el modulo Projectile y hookeamos su constructor/update
--- para reescribir la Direction hacia el target cuando el silent esta activo.
-local function findProjectileNew()
-    -- buscar en el GC la funcion Projectile.new por sus upvalues/constants
-    for _, v in ipairs(getgc(false)) do
-        if type(v) == "function" then
-            local ok, info = pcall(debug.info or (debug and debug.getinfo), v, "n")
-            if ok and type(info) == "string" and info == "new" then
-                local okU, ups = pcall(debug.getupvalues, v)
-                if okU and type(ups) == "table" then
-                    for _, u in pairs(ups) do
-                        if type(u) == "table" and rawget(u, "new") == v then
-                            -- es el .new de una clase: ver si su tabla tiene Speed/Projectile vibe
-                            local hasProj = false
-                            for k2 in pairs(u) do
-                                if k2 == "new" or k2 == "Update" or k2 == "Destroy" then hasProj = hasProj or (k2 ~= "new") end
-                            end
-                            if hasProj then return v end
-                        end
-                    end
-                end
-            end
-        end
-    end
+--// ===== SILENT: hookfunction directo a Fire.FireServer =====
+-- El decompilado muestra: Fire:FireServer(u132, Position_3, Unit)
+-- args: [1]=token, [2]=origen, [3]=DIRECCION. Hookeamos la funcion del remote
+-- y reescribimos la direccion hacia el target (tecnica del video).
+local fireRemoteCached = nil
+local function getFireRemote()
+    if fireRemoteCached and fireRemoteCached.Parent then return fireRemoteCached end
+    local ok, r = pcall(function()
+        return ReplicatedStorage:WaitForChild("Modules", 5)
+            :WaitForChild("GunFramework", 5):WaitForChild("Remotes", 5):WaitForChild("Fire", 5)
+    end)
+    if ok and r then fireRemoteCached = r return r end
     return nil
 end
 
 local function installHook()
     if hookInstalled or not HAS_HOOKS then return false end
-    -- Plan A: hookfunction directo al Projectile.new encontrado en GC
-    local projNew = findProjectileNew()
-    if projNew then
-        local old
-        old = hookfunction(projNew, function(...)
-            local args = {...}
-            -- args[1] es la tabla {Origin, Direction, Speed, RaycastParams}
-            if not dead and settings.silentEnabled and type(args[1]) == "table" and args[1].Direction then
+    local fr = getFireRemote()
+    if not fr then return false end
+    -- hookfunction sobre FireServer del remote (es una C closure hookeable)
+    local okH, old = pcall(hookfunction, fr.FireServer, function(self, ...)
+        local args = {...}
+        if not dead and settings.silentEnabled and self == fr then
+            -- [1]=token [2]=origen [3]=direccion
+            if typeof(args[3]) == "Vector3" and typeof(args[2]) == "Vector3" then
                 local tgt = pickTarget()
                 if tgt and tgt.Parent then
-                    local org = args[1].Origin
-                    if typeof(org) == "Vector3" then
-                        local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
-                        args[1].Direction = (aim - org).Unit
+                    local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
+                    local nd = (aim - args[2]).Unit
+                    if nd.Magnitude > 0 then
+                        return old(self, args[1], args[2], nd)
                     end
                 end
             end
-            return old(table.unpack(args, 1, select("#", ...)))
-        end)
+        end
+        return old(self, ...)
+    end)
+    if okH and old then
+        _G.__SB_OLDFIRE = old
         hookedFire = old
         hookInstalled = true
         return true
     end
-    -- Plan B: hookmetamethod al remote Fire (fallback, como el SL)
-    local okR, fr = pcall(function()
-        return ReplicatedStorage:WaitForChild("Modules", 5)
-            :WaitForChild("GunFramework", 5):WaitForChild("Remotes", 5):WaitForChild("Fire", 5)
-    end)
-    if okR and fr and type(hookmetamethod) == "function" then
-        local old
-        old = hookmetamethod(game, "__namecall", function(self, ...)
+    -- Fallback: hookmetamethod __namecall al mismo remote
+    if type(hookmetamethod) == "function" then
+        local okM, oldM = pcall(hookmetamethod, game, "__namecall", function(self, ...)
             if not dead and settings.silentEnabled and self == fr and getnamecallmethod() == "FireServer" then
                 local args = {...}
-                -- Fire:FireServer(u132, Position_3, Unit) => args[3] es la direccion
-                if typeof(args[3]) == "Vector3" then
+                if typeof(args[3]) == "Vector3" and typeof(args[2]) == "Vector3" then
                     local tgt = pickTarget()
                     if tgt and tgt.Parent then
-                        local org = args[2]
                         local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
-                        args[3] = (aim - org).Unit
-                        return _G.__SB_OLDNC(self, args[1], args[2], args[3])
+                        local nd = (aim - args[2]).Unit
+                        if nd.Magnitude > 0 then
+                            return _G.__SB_OLDNC(self, args[1], args[2], nd)
+                        end
                     end
                 end
             end
             return _G.__SB_OLDNC(self, ...)
         end)
-        if old then _G.__SB_OLDNC = old hookedFire = old hookInstalled = true return true end
+        if okM and oldM then
+            _G.__SB_OLDNC = oldM
+            hookedFire = oldM
+            hookInstalled = true
+            return true
+        end
     end
     return false
 end
 
 local function uninstallHook()
+    if _G.__SB_OLDFIRE and getFireRemote() then
+        pcall(hookfunction, getFireRemote().FireServer, _G.__SB_OLDFIRE)
+        _G.__SB_OLDFIRE = nil
+    end
     if _G.__SB_OLDNC then
         pcall(hookmetamethod, game, "__namecall", _G.__SB_OLDNC)
         _G.__SB_OLDNC = nil
