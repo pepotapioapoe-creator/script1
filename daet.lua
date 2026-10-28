@@ -324,59 +324,126 @@ end
 -- => hookeamos Position.FireServer y reescribimos la parte golpeada por la
 --    cabeza del target (y su dirección). El server aplica el daño.
 local positionRemoteCached = nil
+local hookLog = "" -- diagnostico de instalacion visible en el HUD
 local function getPositionRemote()
     if positionRemoteCached and positionRemoteCached.Parent then return positionRemoteCached end
     local ok, rem = pcall(function()
         return ReplicatedStorage:WaitForChild("Modules", 5)
             :WaitForChild("GunFramework", 5):WaitForChild("Remotes", 5)
     end)
-    if not (ok and rem) then return nil end
-    -- "Position" tiene nombre ofuscado a veces: GUID con guiones
+    if not (ok and rem) then hookLog = "sin carpeta Remotes" return nil end
+    -- por nombre "Position" (algunos juegos) o por GUID 8-4-4-4-12 (este juego)
     local pos = rem:FindFirstChild("Position")
     if not pos then
         for _, v in ipairs(rem:GetChildren()) do
-            if v:IsA("RemoteEvent") and v.Name:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x%x$") then
+            if v:IsA("RemoteEvent")
+            and v.Name:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x%x$") then
                 pos = v break
             end
         end
     end
     if pos then positionRemoteCached = pos return pos end
+    hookLog = "remote Position/GUID no encontrado"
+    return nil
+end
+
+--// ===== SILENT: redirigir la BALA EN VUELO (hook al Projectile) =====
+-- Decompile del Projectile (Modules.Projectile):
+--   u14.new({Origin, Direction, Speed, RaycastParams}) crea la bala
+--   u14:_Update(dt) la mueve con workspace:Raycast(Position, Velocity*dt, params)
+--   si el raycast pega => self:OnHit(result) => GunClient manda Position:FireServer
+-- Plan: hookear u14._Update para que la Velocity apunte al target => la bala
+-- TOCA de verdad al target => el juego reporta el hit legitimo. Nada raro al server.
+local projectileTable = nil
+local oldUpdate = nil
+
+local function findProjectileTable()
+    -- via modulo directo (el require cachea la misma tabla)
+    local ok, mod = pcall(function()
+        return require(ReplicatedStorage:WaitForChild("Modules", 5)
+            :WaitForChild("GunFramework", 5):WaitForChild("Modules", 5)
+            :WaitForChild("Projectile", 5))
+    end)
+    if ok and type(mod) == "table" and type(mod._Update) == "function" and type(mod.new) == "function" then
+        return mod
+    end
+    -- via GC: tabla con _Update + new + Reflect + Destroy (firma exacta del decompile)
+    if type(getgc) == "function" then
+        for _, v in ipairs(getgc(false)) do
+            if type(v) == "table" and rawget(v, "_Update") and rawget(v, "new") and rawget(v, "Reflect") and rawget(v, "Destroy") then
+                return v
+            end
+        end
+    end
     return nil
 end
 
 local function installHook()
     if hookInstalled or not HAS_HOOKS then return false end
-    local pos = getPositionRemote()
-    if not pos then return false end
-    if type(hookfunction) == "function" then
-        local okH, old = pcall(hookfunction, pos.FireServer, function(self, ...)
-            local args = {...}
-            -- [1]=token [2]=Id [3]=parte golpeada [4]=direction [5]=dmg? [6]=token2 [7]=tiempo
-            if not dead and settings.silentEnabled and typeof(args[3]) == "Instance" then
+    -- Plan A: hook al Projectile._Update (bala en vuelo, hit 100% legitimo)
+    projectileTable = findProjectileTable()
+    if projectileTable and type(hookfunction) == "function" then
+        local okH, old = pcall(hookfunction, projectileTable._Update, function(self, dt)
+            if not dead and settings.silentEnabled and not self._sbAimed then
                 local tgt = pickTarget()
                 if tgt and tgt.Parent then
-                    -- reescribir la parte golpeada por la parte del target
-                    args[3] = tgt
-                    -- reescribir la dirección para que apunte al target (algunos servers la chequean)
-                    if typeof(args[4]) == "Vector3" then
-                        local origin = args[3].Position
-                        local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
-                        args[4] = (aim - origin).Unit
+                    local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
+                    local nd = aim - self.Position
+                    if nd.Magnitude > 0.5 then
+                        -- marcar para no re-aimar cada frame (primer giro y listo)
+                        self._sbAimed = true
+                        local sp = self.Velocity.Magnitude
+                        if sp > 0 then
+                            self.Velocity = nd.Unit * sp
+                            self.Direction = nd.Unit
+                        end
                     end
-                    return old(self, table.unpack(args, 1, select("#", ...)))
                 end
             end
-            return old(self, ...)
+            return old(self, dt)
         end)
         if okH and old then
-            _G.__SB_OLDPOS = old
+            _G.__SB_OLDPROJ = old
+            oldUpdate = old
             hookedFire = old
             hookInstalled = true
+            hookLog = ""
             return true
         end
     end
-    -- Fallback: hookmetamethod
-    if type(hookmetamethod) == "function" then
+    -- Plan B: hook al remote Position (reporte de hit)
+    local pos = getPositionRemote()
+    if pos and type(hookfunction) == "function" then
+        local okH2, old2 = pcall(hookfunction, pos.FireServer, function(self, ...)
+            local args = {...}
+            if not dead and settings.silentEnabled and typeof(args[3]) == "Instance" then
+                local tgt = pickTarget()
+                if tgt and tgt.Parent then
+                    args[3] = tgt
+                    if typeof(args[4]) == "Vector3" then
+                        local lr = myRoot()
+                        local origin = lr and lr.Position or tgt.Position
+                        local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
+                        local nd = aim - origin
+                        if nd.Magnitude > 0.1 then
+                            args[4] = nd.Unit
+                        end
+                    end
+                    return old2(self, table.unpack(args, 1, select("#", ...)))
+                end
+            end
+            return old2(self, ...)
+        end)
+        if okH2 and old2 then
+            _G.__SB_OLDPOS = old2
+            hookedFire = old2
+            hookInstalled = true
+            hookLog = ""
+            return true
+        end
+    end
+    -- Plan C: hookmetamethod al Position
+    if pos and type(hookmetamethod) == "function" then
         local okM, oldM = pcall(hookmetamethod, game, "__namecall", function(self, ...)
             if not dead and settings.silentEnabled and self == pos and getnamecallmethod() == "FireServer" then
                 local args = {...}
@@ -385,8 +452,13 @@ local function installHook()
                     if tgt and tgt.Parent then
                         args[3] = tgt
                         if typeof(args[4]) == "Vector3" then
+                            local lr = myRoot()
+                            local origin = lr and lr.Position or tgt.Position
                             local aim = tgt.Position + (tgt.Velocity * (settings.prediction or 0.12))
-                            args[4] = (aim - args[3].Position).Unit
+                            local nd = aim - origin
+                            if nd.Magnitude > 0.1 then
+                                args[4] = nd.Unit
+                            end
                         end
                         return _G.__SB_OLDNC(self, table.unpack(args, 1, select("#", ...)))
                     end
@@ -398,13 +470,19 @@ local function installHook()
             _G.__SB_OLDNC = oldM
             hookedFire = oldM
             hookInstalled = true
+            hookLog = ""
             return true
         end
     end
+    if hookLog == "" then hookLog = "ni Projectile ni remote encontrados" end
     return false
 end
 
 local function uninstallHook()
+    if _G.__SB_OLDPROJ and projectileTable then
+        pcall(hookfunction, projectileTable._Update, _G.__SB_OLDPROJ)
+        _G.__SB_OLDPROJ = nil
+    end
     if _G.__SB_OLDPOS and getPositionRemote() then
         pcall(hookfunction, getPositionRemote().FireServer, _G.__SB_OLDPOS)
         _G.__SB_OLDPOS = nil
@@ -413,6 +491,7 @@ local function uninstallHook()
         pcall(hookmetamethod, game, "__namecall", _G.__SB_OLDNC)
         _G.__SB_OLDNC = nil
     end
+    oldUpdate = nil
     hookedFire = nil
     hookInstalled = false
 end
@@ -665,7 +744,7 @@ SCONN(RunService.RenderStepped:Connect(function(dt)
             if nowS - silentDiagLast > 0.25 then
                 silentDiagLast = nowS
                 if not hookInstalled then
-                    silentStatus.Text = "Silent: no hay hooks en este executor (usar Real)"
+                    silentStatus.Text = "Silent: " .. (hookLog ~= "" and hookLog or "no hay hooks (usar Real)")
                     silentStatus.TextColor3 = Color3.fromRGB(255, 110, 120)
                 else
                     -- contar candidatos y ver que encuentra el picker
@@ -704,8 +783,9 @@ SCONN(RunService.RenderStepped:Connect(function(dt)
                             end
                         end
                         local tgt = pickTarget()
+                        local modo = _G.__SB_OLDPROJ and "BALA" or "REPORTE"
                         if tgt then
-                            silentStatus.Text = string.format("OBJETIVO: %s (%dm del mouse) | listo, pegale a CUALQUIER cosa", tostring(tgt.Parent and tgt.Parent.Name or "?"), math.floor(nearestD))
+                            silentStatus.Text = string.format("[%s] OBJETIVO: %s | disparale a cualquier cosa", modo, tostring(tgt.Parent and tgt.Parent.Name or "?"))
                             silentStatus.TextColor3 = Color3.fromRGB(80, 255, 130)
                         else
                             silentStatus.Text = string.format("SIN OBJETIVO | vivos:%d cerca:%d pant:%d fov:%d", cAlive, cRange, cScreen, cFov)
@@ -723,3 +803,4 @@ end))
 
 --// Mostrar
 mainFrame.Visible = true
+
